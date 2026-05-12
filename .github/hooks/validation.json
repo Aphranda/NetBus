@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "powershell -NoProfile -Command \"if ($env:TOOL_NAME -match 'execute|run_task') { if (-not (Test-Path '.eide')) { Write-Host 'Warning: EIDE project not found. Ensure .eide folder exists.' -ForegroundColor Yellow } }\"",
+        "timeout": 5
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "powershell -NoProfile -Command \"if ($env:TOOL_NAME -match 'execute' -and $env:LAST_EXIT_CODE -ne 0) { Write-Host 'Build or execution failed. Check error messages above.' -ForegroundColor Red }\"",
+        "timeout": 5
+      }
+    ]
+  }
+}

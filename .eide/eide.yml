@@ -1,7 +1,7 @@
 version: "4.1"
 name: STM32H743ZI_NetBus
 type: ARM
-deviceName: null
+deviceName: STM32H743ZITx
 packDir: .pack/Keil/STM32H7xx_DFP.4.1.3
 srcDirs:
   - Core
@@ -80,7 +80,17 @@ targets:
         otherCmds: ""
         proType: 1
         speed: 8000
-    uploader: JLink
+      STLink:
+        address: "0x08000000"
+        bin: ""
+        elFile: None
+        optionBytes: .eide/debug.st.option.bytes.ini
+        otherCmds: ""
+        proType: SWD
+        resetMode: default
+        runAfterProgram: true
+        speed: 4000
+    uploader: STLink
   Release:
     cppPreprocessAttrs:
       defineList:
