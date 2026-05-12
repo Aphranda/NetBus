@@ -10,11 +10,14 @@
   *            for application-specific interrupt handling.
   *
   *          Routed interrupts:
-  *            UART7_IRQHandler
-  *              └─ HAL_UART_IRQHandler(&huart7)
-  *                   └─ HAL_UART_RxCpltCallback() [defined in log.c]
-  *                        └─ Debug CLI: receives chars, parses commands,
-  *                           controls attenuators via IO module
+  *            DMA1_Stream0_IRQHandler  (UART7 RX, CIRCULAR mode / ring buffer)
+  *              └─ HAL_DMA_IRQHandler()
+  *                   └─ UART_DMAReceiveCplt() → HAL_UARTEx_RxEventCallback() [log.c]
+  *                        └─ Debug CLI: parses received block, dispatches commands
+  *            USART7_IRQHandler (IDLE line detection)
+  *              └─ HAL_UART_IRQHandler()
+  *                   └─ UART_IDLECplt() → HAL_UARTEx_RxEventCallback() [log.c]
+  *                        └─ Debug CLI: parses received block, dispatches commands
   *
   *          Adding new interrupts:
   *            1. Define the handler function here
@@ -49,21 +52,29 @@
 /* ── UART7 ─────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  UART7 global interrupt handler
+  * @brief  UART7 global interrupt handler (IDLE line detection)
   * @note   Overrides weak default from startup_stm32h743zitx.s.
-  *         Delegates to HAL_UART_IRQHandler(), which triggers the
-  *         HAL_UART_RxCpltCallback() defined in log.c for debug CLI.
+  *         Delegates to HAL_UART_IRQHandler(), which handles the IDLE
+  *         line interrupt and triggers HAL_UARTEx_RxEventCallback()
+  *         defined in log.c for debug CLI.
   *
   *         Flow:
-  *           UART7_IRQHandler (this file)
+  *           USART7_IRQHandler (this file) — IDLE event
   *             → HAL_UART_IRQHandler (HAL driver)
-  *               → HAL_UART_RxCpltCallback (log.c)
-  *                 → stores byte in line buffer
-  *                 → on '\n': sets pending flag
+  *               → UART_IDLECplt() internal handler
+  *                 → HAL_UARTEx_RxEventCallback (log.c)
+  *                   → processes Size bytes from DMA buffer
+  *                   → on '\n': sets pending flag
+  *                   → restarts DMA via ReceiveToIdle_DMA()
+  *           DMA1_Stream0_IRQHandler — DMA transfer complete
+  *             → HAL_DMA_IRQHandler()
+  *               → UART_DMAReceiveCplt()
+  *                 → HAL_UARTEx_RxEventCallback (log.c)
   *           main loop → Log_DbgProcess (log.c)
-  *             → parses command
-  *             → dispatches to registered handler
+  *             → claims pending command atomically
+  *             → parses and dispatches to registered handler
   *             → e.g. "att a 5" → IO_SetAttenuatorA(5)
+  *             → DMA stays running (restarted by callback)
   */
 void UART7_IRQHandler(void)
 {

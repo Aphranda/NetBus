@@ -8,7 +8,7 @@
   *
   *          Architecture:
   *            LOG_* macros → Log_Print() → vsnprintf() → HAL_UART_Transmit()
-  *            UART RX IT  → line buffer → Log_DbgProcess() → command dispatch
+  *            UART RX DMA + IDLE → line buffer → Log_DbgProcess() → cmd dispatch
   *
   *          Compile-time filtering via LOG_LEVEL eliminates dead code.
   *          Runtime filtering via g_log_config.level skips unwanted output.
@@ -96,7 +96,19 @@ static char              g_dbg_buffer[LOG_DBG_BUF_SIZE]; /*!< Line buffer for in
 static volatile uint8_t  g_dbg_pos;                       /*!< Current write position        */
 static volatile uint8_t  g_dbg_cmd_pending;               /*!< Flag: complete line ready     */
 static uint8_t           g_dbg_echo = 1U;                 /*!< Echo mode (default: on)       */
-static uint8_t           g_dbg_rx_byte;                   /*!< Single byte for RX interrupt  */
+
+/**
+  * @brief DMA RX ring buffer — receives UART data via DMA in CIRCULAR mode
+  * @note  Accessed by DMA (peripheral) and HAL_UARTEx_RxEventCallback() (CPU).
+  *        DMA continuously writes incoming data to the ring buffer, wrapping
+  *        at the buffer boundary. On each IDLE (or TC) event, the callback
+  *        reads available bytes from g_rb_rd_idx to the current NDTR-derived
+  *        write position, then processes them into the line buffer.
+  *
+  *        No DMA restart is needed — CIRCULAR mode keeps the transfer active.
+  */
+static uint8_t           g_dma_rx_buf[LOG_DBG_BUF_SIZE]; /*!< DMA RX ring buffer          */
+static uint16_t          g_rb_rd_idx;                     /*!< Ring buffer read index [0..BUF_SIZE) */
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -158,21 +170,32 @@ HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config)
 
     /* ── Initialize debug command subsystem ──────────────────────────────── */
 
-    /* Reset debug buffer */
+    /* Reset debug buffer and ring buffer read index */
     g_dbg_pos         = 0U;
     g_dbg_cmd_pending = 0U;
     g_dbg_echo        = 1U;
+    g_rb_rd_idx       = 0U;
 
     /* Clear command table and register built-in commands */
     g_dbg_cmd_count = 0U;
     (void)Log_RegisterDbgCmd("help", _dbg_cmd_help);
     (void)Log_RegisterDbgCmd("att",  _dbg_cmd_att);
 
-    /* Start UART RX interrupt for debug terminal input */
-    HAL_UART_Receive_IT(g_log_config.huart, &g_dbg_rx_byte, 1U);
+    /* Start UART RX via DMA with IDLE line detection (CIRCULAR mode).
+     * DMA continuously receives bytes into g_dma_rx_buf ring buffer.
+     * When the UART line goes idle (after a complete line), the IDLE
+     * interrupt fires and HAL_UARTEx_RxEventCallback() processes the
+     * received bytes. DMA keeps running — no restart needed. */
+    if (HAL_UARTEx_ReceiveToIdle_DMA(g_log_config.huart, g_dma_rx_buf, LOG_DBG_BUF_SIZE) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+
+    /* Disable DMA half-transfer interrupt — we only care about IDLE/TC events */
+    __HAL_DMA_DISABLE_IT(g_log_config.huart->hdmarx, DMA_IT_HT);
 
     /* Send an initialization banner to confirm UART is working */
-    Log_Print(LOG_LEVEL_INFO, "Log module initialized (UART7 @ 115200 8N1)");
+    Log_Print(LOG_LEVEL_INFO, "Log module initialized (UART7 @ 115200 8N1, DMA+IDLE)");
     Log_Print(LOG_LEVEL_INFO, "Debug CLI ready — type 'help' for commands");
 
     return HAL_OK;
@@ -303,8 +326,9 @@ void Log_DbgProcess(void)
     /* Parse and execute */
     _dbg_parse_and_execute(g_dbg_buffer);
 
-    /* Restart UART RX interrupt for next character */
-    HAL_UART_Receive_IT(g_log_config.huart, &g_dbg_rx_byte, 1U);
+    /* DMA is already running continuously in CIRCULAR mode —
+     * HAL_UARTEx_RxEventCallback() reads from the ring buffer
+     * each time IDLE fires. No restart is needed. */
 }
 
 /**
@@ -400,17 +424,24 @@ static int _log_write_timestamp(char *buf, size_t size)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  HAL UART RX callback — receives one byte at a time via interrupt          */
+/*  HAL UART RX Event callback — ring buffer read via CIRCULAR DMA + IDLE     */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  UART RX complete callback (HAL weak override)
-  * @note   Called by HAL when a byte is received via interrupt.
-  *         Stores the byte into the debug line buffer.
-  *         When newline (\n or \r) is received, sets the pending flag
-  *         and stops RX IT (restarted by Log_DbgProcess()).
+  * @brief  UART RX Event callback (HAL weak override)
+  * @note   Called by HAL on IDLE line detection or DMA transfer complete.
+  *         DMA runs in CIRCULAR mode — continuously writing to g_dma_rx_buf.
+  *         This callback reads available bytes from the ring buffer using
+  *         NDTR to compute the current write position, then processes them
+  *         into the debug line buffer. DMA keeps running — no restart needed.
+  *
+  *         TC events (DMA wrap): read index resets to avoid re-processing
+  *         old data (already handled by prior IDLE events for CLI use).
+  *
+  * @param  huart  UART handle
+  * @param  Size   Number of bytes in current DMA cycle (not used directly)
   */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     /* Only process UART7 — the log/debug UART */
     if (huart != g_log_config.huart)
@@ -418,72 +449,86 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         return;
     }
 
-    uint8_t ch = g_dbg_rx_byte;
+    /* ── Compute DMA write position from NDTR ──────────────────────────── */
+    /* NDTR decrements from LOG_DBG_BUF_SIZE → 0 as DMA fills the buffer.
+     * Write index = (BUF_SIZE - NDTR) gives the current write position.
+     * When NDTR was 0 (TC/wrap), it reloads to BUF_SIZE → wr_idx = 0. */
+    uint16_t ndtr    = (uint16_t)__HAL_DMA_GET_COUNTER(huart->hdmarx);
+    uint16_t wr_idx  = LOG_DBG_BUF_SIZE - ndtr;
+    if (wr_idx >= LOG_DBG_BUF_SIZE) wr_idx = 0U;
 
-    /* ── Handle Backspace (0x7F / 0x08) ─────────────────────────────────── */
-    if (ch == 0x7FU || ch == 0x08U)
+    /* ── Handle TC (DMA wrap) events ───────────────────────────────────── */
+    /* On TC, the entire buffer just wrapped. All data from the completed
+     * cycle was already processed by prior IDLE events (CLI use case).
+     * Reset read index to current write position to stay in sync. */
+    if (huart->RxEventType == HAL_UART_RXEVENT_TC)
     {
-        if (g_dbg_pos > 0U)
-        {
-            g_dbg_pos--;
-            if (g_dbg_echo != 0U)
-            {
-                /* Echo backspace sequence: '\b \b' to erase on terminal */
-                uint8_t bs_seq[] = { 0x08U, 0x20U, 0x08U };
-                HAL_UART_Transmit(huart, bs_seq, 3U, 100U);
-            }
-        }
-        /* Re-arm RX IT */
-        HAL_UART_Receive_IT(huart, &g_dbg_rx_byte, 1U);
+        g_rb_rd_idx = wr_idx;
         return;
     }
 
-    /* ── Handle End-of-Line: \n or \r ───────────────────────────────────── */
-    if (ch == '\n' || ch == '\r')
-    {
-        if (g_dbg_pos > 0U)
-        {
-            /* Line complete — set pending flag for Log_DbgProcess() */
-            g_dbg_cmd_pending = 1U;
+    /* ── IDLE event — process available bytes from ring buffer ─────────── */
+    /* Read bytes from g_rb_rd_idx up to wr_idx, handling ring wrap. */
 
-            /* Echo newline back */
+    /* Segment 1: from rd_idx to end of buffer (if wr_idx wrapped) */
+    while (g_rb_rd_idx < wr_idx)
+    {
+        uint8_t ch = g_dma_rx_buf[g_rb_rd_idx];
+        g_rb_rd_idx++;
+
+        /* ── Handle Backspace (0x7F / 0x08) ─────────────────────────── */
+        if (ch == 0x7FU || ch == 0x08U)
+        {
+            if (g_dbg_pos > 0U)
+            {
+                g_dbg_pos--;
+                if (g_dbg_echo != 0U)
+                {
+                    uint8_t bs_seq[] = { 0x08U, 0x20U, 0x08U };
+                    HAL_UART_Transmit(huart, bs_seq, 3U, 100U);
+                }
+            }
+            continue;
+        }
+
+        /* ── Handle End-of-Line: \n or \r ───────────────────────────── */
+        if (ch == '\n' || ch == '\r')
+        {
+            if (g_dbg_pos > 0U)
+            {
+                g_dbg_cmd_pending = 1U;
+                if (g_dbg_echo != 0U)
+                {
+                    uint8_t crlf[] = { '\r', '\n' };
+                    HAL_UART_Transmit(huart, crlf, 2U, 100U);
+                }
+                /* Stop — remaining bytes will arrive in next IDLE event */
+                break;
+            }
             if (g_dbg_echo != 0U)
             {
                 uint8_t crlf[] = { '\r', '\n' };
                 HAL_UART_Transmit(huart, crlf, 2U, 100U);
             }
-
-            /* Do NOT restart RX IT here — Log_DbgProcess() will do it
-             * after consuming the command, to avoid buffer corruption. */
-            return;
+            continue;
         }
-        /* Empty line — just echo and re-arm */
-        if (g_dbg_echo != 0U)
-        {
-            uint8_t crlf[] = { '\r', '\n' };
-            HAL_UART_Transmit(huart, crlf, 2U, 100U);
-        }
-        HAL_UART_Receive_IT(huart, &g_dbg_rx_byte, 1U);
-        return;
-    }
 
-    /* ── Handle printable characters ────────────────────────────────────── */
-    if (ch >= 0x20U && ch <= 0x7EU)
-    {
-        if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
+        /* ── Handle printable characters ────────────────────────────── */
+        if (ch >= 0x20U && ch <= 0x7EU)
         {
-            g_dbg_buffer[g_dbg_pos++] = (char)ch;
-
-            /* Echo character back */
-            if (g_dbg_echo != 0U)
+            if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
             {
-                HAL_UART_Transmit(huart, &g_dbg_rx_byte, 1U, 100U);
+                g_dbg_buffer[g_dbg_pos++] = (char)ch;
+                if (g_dbg_echo != 0U)
+                {
+                    HAL_UART_Transmit(huart, &g_dma_rx_buf[g_rb_rd_idx - 1U], 1U, 100U);
+                }
             }
         }
     }
 
-    /* Re-arm RX interrupt for next byte */
-    HAL_UART_Receive_IT(huart, &g_dbg_rx_byte, 1U);
+    /* DMA runs continuously in CIRCULAR mode — no restart needed here.
+     * __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT) was done once in init. */
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
