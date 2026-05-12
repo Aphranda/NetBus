@@ -35,6 +35,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include "io.h"
+#include "usart.h"      /* for huart8 in RS485 dispatch */
+#include "rs485.h"      /* for RS485_UART_RxEventCallback */
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -443,6 +445,13 @@ static int _log_write_timestamp(char *buf, size_t size)
   */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
+    /* ── Dispatch UART8 (RS485) to its own handler ─────────────────────── */
+    if (huart == &huart8)
+    {
+        RS485_UART_RxEventCallback(huart, Size);
+        return;
+    }
+
     /* Only process UART7 — the log/debug UART */
     if (huart != g_log_config.huart)
     {

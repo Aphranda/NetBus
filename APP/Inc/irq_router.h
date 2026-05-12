@@ -45,6 +45,16 @@ extern "C" {
 
 /* Exported functions --------------------------------------------------------*/
 
+/*
+ * Interrupt handlers — strong definitions override weak defaults from
+ * startup_stm32h743zitx.s.  These are declared here for documentation
+ * purposes; the vector table references them by name directly.
+ */
+void DMA1_Stream2_IRQHandler(void);
+void DMA1_Stream3_IRQHandler(void);
+void UART7_IRQHandler(void);
+void UART8_IRQHandler(void);
+
 #ifdef __cplusplus
 }
 #endif

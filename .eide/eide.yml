@@ -34,6 +34,7 @@ targets:
         - ThirdParty/Log/Inc
         - APP/Inc
         - ThirdParty/IO/Inc
+        - ThirdParty/RS485/Inc
       libList: []
     excludeList: []
     settings: {}

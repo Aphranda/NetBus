@@ -106,11 +106,15 @@ int main(void)
   }
   /* USER CODE END 2 */
 
-  /* Infinite loop — application task manager owns the main loop */
+  /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   App_Task_Loop();  /* Never returns */
-  /* USER CODE END WHILE */
-}
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+  /* USER CODE END 3 */
+
 
 /**
   * @brief System Clock Configuration

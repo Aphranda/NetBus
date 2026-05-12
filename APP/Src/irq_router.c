@@ -36,6 +36,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "irq_router.h"
 #include "usart.h"
+#include "dma.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -79,4 +80,40 @@
 void UART7_IRQHandler(void)
 {
     HAL_UART_IRQHandler(&huart7);
+}
+
+/* ── UART8 (RS485) ─────────────────────────────────────────────────────────── */
+
+/**
+  * @brief  UART8 global interrupt handler (IDLE line detection for RS485)
+  * @note   Overrides weak default from startup_stm32h743zitx.s.
+  *         Delegates to HAL_UART_IRQHandler(), which handles the IDLE
+  *         line interrupt and triggers HAL_UARTEx_RxEventCallback()
+  *         defined in log.c (dispatches to RS485 for UART8).
+  */
+void UART8_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&huart8);
+}
+
+/**
+  * @brief  DMA1 Stream2 interrupt handler (UART8 RX, CIRCULAR mode)
+  * @note   Overrides weak default from startup_stm32h743zitx.s.
+  *         Handles DMA transfer complete events for UART8 RX.
+  *         Delegates to HAL_DMA_IRQHandler().
+  */
+void DMA1_Stream2_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(huart8.hdmarx);
+}
+
+/**
+  * @brief  DMA1 Stream3 interrupt handler (UART8 TX, NORMAL mode)
+  * @note   Overrides weak default from startup_stm32h743zitx.s.
+  *         Handles DMA transfer complete events for UART8 TX.
+  *         Delegates to HAL_DMA_IRQHandler().
+  */
+void DMA1_Stream3_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(huart8.hdmatx);
 }
