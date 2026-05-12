@@ -95,7 +95,7 @@ static uint8_t           g_dbg_cmd_count = 0U;
 static char              g_dbg_buffer[LOG_DBG_BUF_SIZE]; /*!< Line buffer for incoming chars */
 static volatile uint8_t  g_dbg_pos;                       /*!< Current write position        */
 static volatile uint8_t  g_dbg_cmd_pending;               /*!< Flag: complete line ready     */
-static uint8_t           g_dbg_echo = 1U;                 /*!< Echo mode (default: on)       */
+static uint8_t           g_dbg_echo = 0U;                 /*!< Echo mode (default: off)      */
 
 /**
   * @brief DMA RX ring buffer — receives UART data via DMA in CIRCULAR mode
@@ -173,7 +173,7 @@ HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config)
     /* Reset debug buffer and ring buffer read index */
     g_dbg_pos         = 0U;
     g_dbg_cmd_pending = 0U;
-    g_dbg_echo        = 1U;
+    g_dbg_echo        = 0U;  /* Echo off by default */
     g_rb_rd_idx       = 0U;
 
     /* Clear command table and register built-in commands */
