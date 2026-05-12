@@ -33,6 +33,7 @@ targets:
         - Drivers/CMSIS/Include
         - ThirdParty/Log/Inc
         - APP/Inc
+        - ThirdParty/IO/Inc
       libList: []
     excludeList: []
     settings: {}

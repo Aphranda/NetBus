@@ -114,6 +114,13 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 
 /**
+  * @brief Debug command callback — receives parsed argc/argv
+  * @param argc  Number of arguments
+  * @param argv  Array of argument strings (argv[0] = command name)
+  */
+typedef void (*Log_DbgCmdFunc_t)(int argc, char **argv);
+
+/**
   * @brief Log configuration structure
   */
 typedef struct {
@@ -124,6 +131,47 @@ typedef struct {
 } Log_Config_t;
 
 /* Exported functions --------------------------------------------------------*/
+
+/**
+  * @brief  Process any pending debug commands from UART RX
+  * @note   Call this periodically from the main loop or task process hook.
+  *         Parses received line, matches against registered commands,
+  *         and invokes the corresponding callback.
+  */
+void Log_DbgProcess(void);
+
+/**
+  * @brief  Register a custom debug command
+  * @param  cmd   Command name string (e.g. "att", "help")
+  * @param  func  Callback function to handle the command
+  * @retval HAL_OK on success
+  * @retval HAL_ERROR if command table is full
+  * @note   Built-in commands ("help", "att") are registered automatically
+  *         during Log_InitEx(). Call this after Log_Init() to add more.
+  */
+HAL_StatusTypeDef Log_RegisterDbgCmd(const char *cmd, Log_DbgCmdFunc_t func);
+
+/**
+  * @brief  Enable or disable UART echo for debug terminal
+  * @param  enable  1 = echo on (default), 0 = echo off
+  */
+void Log_DbgSetEcho(uint8_t enable);
+
+/**
+  * @brief  Get the number of received characters pending in the debug buffer
+  * @retval Number of characters in buffer (0 = empty)
+  */
+uint8_t Log_DbgAvailable(void);
+
+/**
+  * @brief  Manually inject a debug command string for processing
+  * @param  cmd  Null-terminated command string (e.g. "att a 5")
+  * @note   Useful for programmatic command injection or testing.
+  *         The string is copied into the internal buffer and processed
+  *         on the next Log_DbgProcess() call.
+  */
+void Log_DbgInject(const char *cmd);
+
 
 /**
   * @brief  Initialize the log module with default configuration (UART7).

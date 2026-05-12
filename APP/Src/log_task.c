@@ -129,6 +129,9 @@ static App_Status_t _log_task_init(void)
   */
 static App_Status_t _log_task_process(void)
 {
+    /* Process any pending debug commands from UART RX */
+    Log_DbgProcess();
+
     return APP_OK;
 }
 

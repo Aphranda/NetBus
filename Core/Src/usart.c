@@ -192,6 +192,10 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
   /* USER CODE BEGIN UART7_MspInit 1 */
 
+    /* Enable NVIC for UART7 interrupt (used by debug CLI) */
+    HAL_NVIC_SetPriority(UART7_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(UART7_IRQn);
+
   /* USER CODE END UART7_MspInit 1 */
   }
   else if(uartHandle->Instance==UART8)
