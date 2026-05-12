@@ -96,6 +96,15 @@ App_Status_t App_RegisterModule(const App_Module_t *module);
 App_Status_t App_Task_Init(void);
 
 /**
+  * @brief  Initialize all application modules in one call
+  * @note   Single entry point for main(). Registers ALL built-in modules,
+  *         then calls App_Task_Init() to initialize them in order.
+  *         Replace manual App_RegisterModule() + App_Task_Init() sequence.
+  * @retval APP_OK on success, APP_ERROR if any module fails
+  */
+App_Status_t App_Init(void);
+
+/**
   * @brief  Main application loop — calls process() on all registered modules
   * @note   Call inside while(1) in main(). Never returns.
   *         Modules are processed round-robin in registration order.

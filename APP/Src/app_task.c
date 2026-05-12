@@ -30,6 +30,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "app_task.h"
+#include "log_task.h"
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
@@ -64,6 +65,31 @@ static uint32_t g_error_count = 0U;
 /* Private function prototypes -----------------------------------------------*/
 
 /* Exported functions --------------------------------------------------------*/
+
+/**
+  * @brief  Initialize all application modules — single entry point for main()
+  * @note   Registers ALL built-in modules (Log first, then others), then
+  *         initializes them in registration order via App_Task_Init().
+  *         As new modules are added, register them here instead of in main().
+  * @retval APP_OK on success, APP_ERROR if any module fails
+  */
+App_Status_t App_Init(void)
+{
+    App_Status_t status;
+
+    /* ── Register Log task first — must be first so other modules can log during init ─ */
+    status = App_RegisterModule(&g_log_task_module);
+    if (status != APP_OK)
+    {
+        return status;
+    }
+
+    /* ── Register additional modules here ──────────────────────────────────── */
+    /* e.g. status = App_RegisterModule(&g_xxx_module); if (status != APP_OK) return status; */
+
+    /* ── Initialize all registered modules in order ────────────────────────── */
+    return App_Task_Init();
+}
 
 /**
   * @brief  Register an application module
