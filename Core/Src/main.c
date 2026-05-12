@@ -26,7 +26,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "app_task.h"
+#include "log_task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -99,18 +100,23 @@ int main(void)
   MX_UART7_Init();
   MX_UART8_Init();
   /* USER CODE BEGIN 2 */
+  /* Register Log task first — must be first so other modules can log during init */
+  if (App_RegisterModule(&g_log_task_module) != APP_OK)
+  {
+      Error_Handler();
+  }
 
+  /* Initialize application task manager (calls init() on all registered modules) */
+  if (App_Task_Init() != APP_OK)
+  {
+      Error_Handler();
+  }
   /* USER CODE END 2 */
 
-  /* Infinite loop */
+  /* Infinite loop — application task manager owns the main loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
+  App_Task_Loop();  /* Never returns */
+  /* USER CODE END WHILE */
 }
 
 /**

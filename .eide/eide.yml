@@ -6,6 +6,8 @@ packDir: .pack/Keil/STM32H7xx_DFP.4.1.3
 srcDirs:
   - Core
   - Drivers
+  - APP
+  - ThirdParty
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -23,11 +25,14 @@ targets:
         - USE_HAL_DRIVER
         - STM32H743xx
       incList:
+        - .
         - Core/Inc
         - Drivers/STM32H7xx_HAL_Driver/Inc
         - Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
         - Drivers/CMSIS/Device/ST/STM32H7xx/Include
         - Drivers/CMSIS/Include
+        - ThirdParty/Log/Inc
+        - APP/Inc
       libList: []
     excludeList: []
     settings: {}
@@ -103,6 +108,7 @@ targets:
         - Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
         - Drivers/CMSIS/Device/ST/STM32H7xx/Include
         - Drivers/CMSIS/Include
+        - ThirdParty/Log/Inc
       libList: []
     excludeList: []
     settings: {}
