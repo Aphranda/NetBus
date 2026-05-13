@@ -30,6 +30,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "rs485_task.h"
 #include "rs485.h"
+#include "modbus.h"
 #include "log.h"
 #include <string.h>
 #include <stdlib.h>
@@ -38,11 +39,6 @@
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
-
-/**
-  * @brief  Maximum length of a Modbus RTU frame
-  */
-#define MODBUS_MAX_FRAME_LEN   32U
 
 /**
   * @brief  Maximum received data to print per process cycle (bytes)
@@ -58,6 +54,11 @@
   */
 static uint8_t g_rs485_rx_buf[RS485_PRINT_MAX];
 
+/**
+  * @brief  Buffer for Modbus raw send/receive (debug CLI)
+  */
+static uint8_t g_dbg_modbus_buf[MODBUS_MAX_FRAME_LEN];
+
 /* Private function prototypes -----------------------------------------------*/
 
 static App_Status_t _rs485_task_init(void);
@@ -68,7 +69,6 @@ static void         _rs485_task_on_error(App_Status_t err);
 static void _dbg_cmd_modbus(int argc, char **argv);
 
 /* Internal helpers */
-static uint16_t _modbus_crc16(const uint8_t *data, uint16_t len);
 static int      _hex_to_byte(const char *hex, uint8_t *out);
 static void     _print_hex(const char *prefix, const uint8_t *data, uint16_t len);
 
@@ -105,6 +105,11 @@ static App_Status_t _rs485_task_init(void)
         return APP_ERROR;
     }
 
+    /* Initialize Modbus RTU Master (ThirdParty/Modbus) */
+    Modbus_Init();
+    LOG_INFO("RS485_Task: Modbus master initialized (timeout=%lu ms)",
+             (unsigned long)Modbus_GetTimeout());
+
     /* Register "modbus" debug CLI command */
     if (Log_RegisterDbgCmd("modbus", _dbg_cmd_modbus) != HAL_OK)
     {
@@ -127,6 +132,13 @@ static App_Status_t _rs485_task_init(void)
 static App_Status_t _rs485_task_process(void)
 {
     uint16_t avail = RS485_Available();
+
+    /* If a Modbus transaction is in progress, do NOT consume RX data —
+     * the Modbus master library handles response collection internally. */
+    if (Modbus_IsTransactionPending())
+    {
+        return APP_OK;
+    }
 
     if (avail > 0U)
     {
@@ -161,28 +173,36 @@ static void _rs485_task_on_error(App_Status_t err)
   *
   *         Usage:
   *           modbus read <slave> <reg> <qty>
-  *             - Send Modbus FC=03 (Read Holding Registers) query
-  *             - slave: slave address (0-247)
-  *             - reg:   starting register address
+  *             - Send Modbus FC=03 (Read Holding Registers) query and wait
+  *               for response. Displays decoded register values on success.
+  *             - slave: slave address (1-247)
+  *             - reg:   starting register address (0-65535)
   *             - qty:   number of registers to read (1-125)
-  *             - Example: "modbus read 1 2 1" → 01 03 00 02 00 01 CRChi CRClo
+  *             - Example: "modbus read 1 2 1"
+  *
+  *           modbus write <slave> <reg> <value>
+  *             - Send Modbus FC=06 (Write Single Register)
+  *             - Example: "modbus write 1 0 1234"
   *
   *           modbus send <hex bytes...>
-  *             - Send raw hex bytes over RS485
+  *             - Send raw hex bytes over RS485 (NO CRC appended, NO response wait)
   *             - Example: "modbus send 01 03 00 02 00 01 24 0A"
+  *
+  *           Note: "modbus read" uses the Modbus library (ThirdParty/Modbus)
+  *                 which waits for response, validates CRC, and parses data.
+  *                 "modbus send" is a raw passthrough — no response handling.
   */
 static void _dbg_cmd_modbus(int argc, char **argv)
 {
-    uint8_t frame[MODBUS_MAX_FRAME_LEN];
-    uint16_t frame_len = 0U;
-
     if (argc < 2)
     {
         LOG_INFO("Usage:");
-        LOG_INFO("  modbus read <slave> <reg> <qty>   -- Modbus FC=03 read");
-        LOG_INFO("  modbus send <hex bytes...>        -- Send raw hex");
+        LOG_INFO("  modbus read <slave> <reg> <qty>   -- Read Holding Registers (FC=03)");
+        LOG_INFO("  modbus write <slave> <reg> <val>  -- Write Single Register (FC=06)");
+        LOG_INFO("  modbus send <hex bytes...>        -- Send raw hex (no CRC/response)");
         LOG_INFO("Example:");
         LOG_INFO("  modbus read 1 2 1");
+        LOG_INFO("  modbus write 1 0 1234");
         LOG_INFO("  modbus send 01 03 00 02 00 01 24 0A");
         return;
     }
@@ -198,9 +218,9 @@ static void _dbg_cmd_modbus(int argc, char **argv)
 
         /* Parse slave address */
         long slave = strtol(argv[2], NULL, 0);
-        if (slave < 0 || slave > 247)
+        if (slave < 1 || slave > 247)
         {
-            LOG_INFO("Error: invalid slave address '%s' (0-247)", argv[2]);
+            LOG_INFO("Error: invalid slave address '%s' (1-247)", argv[2]);
             return;
         }
 
@@ -220,27 +240,97 @@ static void _dbg_cmd_modbus(int argc, char **argv)
             return;
         }
 
-        /* Build Modbus RTU frame: Address + FC=03 + Reg_H + Reg_L + Qty_H + Qty_L */
-        frame[0] = (uint8_t)(slave & 0xFFU);
-        frame[1] = 0x03U;  /* Read Holding Registers */
-        frame[2] = (uint8_t)((reg >> 8) & 0xFFU);
-        frame[3] = (uint8_t)(reg & 0xFFU);
-        frame[4] = (uint8_t)((qty >> 8) & 0xFFU);
-        frame[5] = (uint8_t)(qty & 0xFFU);
-        frame_len = 6U;
+        /* ── Execute Modbus Read Holding Registers via library ─────────── */
+        LOG_INFO("Modbus: FC=03 read (slave=%ld, reg=%ld, qty=%ld)",
+                 slave, reg, qty);
 
-        /* Append CRC16 (little-endian) */
-        uint16_t crc = _modbus_crc16(frame, frame_len);
-        frame[frame_len++] = (uint8_t)(crc & 0xFFU);
-        frame[frame_len++] = (uint8_t)((crc >> 8) & 0xFFU);
+        uint16_t regs[MODBUS_MAX_REGISTERS];
+        Modbus_Result_t res = Modbus_ReadHoldingRegisters(
+            (uint8_t)slave, (uint16_t)reg, (uint16_t)qty, regs);
 
-        /* Log the frame being sent */
-        LOG_INFO("Modbus: sending FC=03 read (slave=%ld, reg=%ld, qty=%ld)", slave, reg, qty);
-        _print_hex("Modbus TX", frame, frame_len);
+        if (res.status == MODBUS_OK)
+        {
+            LOG_INFO("Modbus: SUCCESS - %ld register(s):", qty);
+            for (long i = 0; i < qty; i++)
+            {
+                LOG_INFO("  reg[%ld] = %u (0x%04X)", reg + i,
+                         (unsigned)regs[i], (unsigned)regs[i]);
+            }
+        }
+        else if (res.status == MODBUS_ERR_EXCEPTION)
+        {
+            LOG_ERROR("Modbus: EXCEPTION (code=0x%02X: %s)",
+                      (unsigned)res.exc_code,
+                      Modbus_ExceptionString(res.exc_code));
+        }
+        else
+        {
+            LOG_ERROR("Modbus: FAILED - %s", Modbus_StatusString(res.status));
+        }
+
+        return;
     }
-    /* ── modbus send <hex bytes...> ───────────────────────────────────────── */
-    else if (strcmp(argv[1], "send") == 0)
+
+    /* ── modbus write <slave> <reg> <value> ──────────────────────────────── */
+    if (strcmp(argv[1], "write") == 0)
     {
+        if (argc < 5)
+        {
+            LOG_INFO("Error: missing arguments. Usage: modbus write <slave> <reg> <val>");
+            return;
+        }
+
+        long slave = strtol(argv[2], NULL, 0);
+        if (slave < 1 || slave > 247)
+        {
+            LOG_INFO("Error: invalid slave address '%s' (1-247)", argv[2]);
+            return;
+        }
+
+        long reg = strtol(argv[3], NULL, 0);
+        if (reg < 0 || reg > 0xFFFF)
+        {
+            LOG_INFO("Error: invalid register address '%s' (0-65535)", argv[3]);
+            return;
+        }
+
+        long val = strtol(argv[4], NULL, 0);
+        if (val < 0 || val > 0xFFFF)
+        {
+            LOG_INFO("Error: invalid value '%s' (0-65535)", argv[4]);
+            return;
+        }
+
+        /* ── Execute Modbus Write Single Register via library ──────────── */
+        LOG_INFO("Modbus: FC=06 write (slave=%ld, reg=%ld, value=%ld)",
+                 slave, reg, val);
+
+        Modbus_Result_t res = Modbus_WriteSingleRegister(
+            (uint8_t)slave, (uint16_t)reg, (uint16_t)val);
+
+        if (res.status == MODBUS_OK)
+        {
+            LOG_INFO("Modbus: SUCCESS - wrote %ld to reg[%ld]", val, reg);
+        }
+        else if (res.status == MODBUS_ERR_EXCEPTION)
+        {
+            LOG_ERROR("Modbus: EXCEPTION (code=0x%02X: %s)",
+                      (unsigned)res.exc_code,
+                      Modbus_ExceptionString(res.exc_code));
+        }
+        else
+        {
+            LOG_ERROR("Modbus: FAILED - %s", Modbus_StatusString(res.status));
+        }
+
+        return;
+    }
+
+    /* ── modbus send <hex bytes...> ───────────────────────────────────────── */
+    if (strcmp(argv[1], "send") == 0)
+    {
+        uint16_t frame_len = 0U;
+
         if (argc < 3)
         {
             LOG_INFO("Error: missing hex bytes. Usage: modbus send <hex...>");
@@ -256,7 +346,7 @@ static void _dbg_cmd_modbus(int argc, char **argv)
                 LOG_INFO("Error: invalid hex byte '%s' at position %d", argv[i], i - 1);
                 return;
             }
-            frame[frame_len++] = byte;
+            g_dbg_modbus_buf[frame_len++] = byte;
         }
 
         if (frame_len == 0U)
@@ -266,53 +356,23 @@ static void _dbg_cmd_modbus(int argc, char **argv)
         }
 
         LOG_INFO("Modbus: sending raw %u bytes", (unsigned)frame_len);
-        _print_hex("Modbus TX", frame, frame_len);
-    }
-    else
-    {
-        LOG_INFO("Error: unknown sub-command '%s'. Use 'read' or 'send'.", argv[1]);
+        _print_hex("Modbus TX", g_dbg_modbus_buf, frame_len);
+
+        /* Send via RS485 (blocking) */
+        if (RS485_Send(g_dbg_modbus_buf, frame_len) != HAL_OK)
+        {
+            LOG_ERROR("Modbus: RS485_Send() failed");
+        }
         return;
     }
 
-    /* ── Send the frame over RS485 (blocking) ─────────────────────────────── */
-    if (RS485_Send(frame, frame_len) != HAL_OK)
-    {
-        LOG_ERROR("Modbus: RS485_Send() failed");
-    }
+    /* ── Unknown sub-command ─────────────────────────────────────────────── */
+    LOG_INFO("Error: unknown sub-command '%s'. Use 'read', 'write', or 'send'.", argv[1]);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Internal Helpers                                                           */
 /* ─────────────────────────────────────────────────────────────────────────── */
-
-/**
-  * @brief  Compute Modbus RTU CRC-16
-  * @param  data  Pointer to data buffer
-  * @param  len   Length of data
-  * @return CRC-16 value
-  */
-static uint16_t _modbus_crc16(const uint8_t *data, uint16_t len)
-{
-    uint16_t crc = 0xFFFFU;
-
-    for (uint16_t i = 0U; i < len; i++)
-    {
-        crc ^= (uint16_t)data[i];
-        for (uint8_t j = 0U; j < 8U; j++)
-        {
-            if ((crc & 0x0001U) != 0U)
-            {
-                crc = (crc >> 1U) ^ 0xA001U;
-            }
-            else
-            {
-                crc >>= 1U;
-            }
-        }
-    }
-
-    return crc;
-}
 
 /**
   * @brief  Convert a hex string (e.g. "0x1A", "1A", "01") to a byte

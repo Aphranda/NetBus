@@ -35,6 +35,7 @@ targets:
         - APP/Inc
         - ThirdParty/IO/Inc
         - ThirdParty/RS485/Inc
+        - ThirdParty/Modbus/Inc
       libList: []
     excludeList: []
     settings: {}
