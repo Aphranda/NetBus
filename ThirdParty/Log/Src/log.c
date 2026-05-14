@@ -315,18 +315,23 @@ void Log_DbgProcess(void)
         return;
     }
 
-    /* Atomically claim the pending command */
+    /*
+     * Copy the line into a local buffer INSIDE the critical section
+     * so that the UART7 IDLE interrupt callback cannot overwrite
+     * g_dbg_buffer while we are parsing it.
+     */
+    char buf[LOG_DBG_BUF_SIZE];
+
     __disable_irq();
     g_dbg_cmd_pending = 0U;
     uint8_t len = g_dbg_pos;
     g_dbg_pos = 0U;
+    memcpy(buf, g_dbg_buffer, len);
+    buf[len] = '\0';
     __enable_irq();
 
-    /* Null-terminate the line */
-    g_dbg_buffer[len] = '\0';
-
-    /* Parse and execute */
-    _dbg_parse_and_execute(g_dbg_buffer);
+    /* Parse and execute the local copy (immune to interrupt overwrite) */
+    _dbg_parse_and_execute(buf);
 
     /* DMA is already running continuously in CIRCULAR mode —
      * HAL_UARTEx_RxEventCallback() reads from the ring buffer
@@ -466,76 +471,180 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     uint16_t wr_idx  = LOG_DBG_BUF_SIZE - ndtr;
     if (wr_idx >= LOG_DBG_BUF_SIZE) wr_idx = 0U;
 
-    /* ── Handle TC (DMA wrap) events ───────────────────────────────────── */
-    /* On TC, the entire buffer just wrapped. All data from the completed
-     * cycle was already processed by prior IDLE events (CLI use case).
-     * Reset read index to current write position to stay in sync. */
-    if (huart->RxEventType == HAL_UART_RXEVENT_TC)
+    /* ── IDLE event — process available bytes from ring buffer ─────────── */
+    /* Read bytes from g_rb_rd_idx up to wr_idx, handling ring wrap.
+     *
+     * The DMA runs in CIRCULAR mode. On each IDLE event, there may be
+     * data in the ring buffer from g_rb_rd_idx (the last-read position)
+     * up to wr_idx (the current DMA write position). Three cases exist:
+     *
+     *   Case A (no wrap):  g_rb_rd_idx < wr_idx
+     *       Data is contiguous in [g_rb_rd_idx, wr_idx).
+     *
+     *   Case B (wrap):     g_rb_rd_idx > wr_idx
+     *       Data wraps around the buffer boundary:
+     *         Segment 1: [g_rb_rd_idx, LOG_DBG_BUF_SIZE)
+     *         Segment 2: [0, wr_idx)
+     *
+     *   Case C (empty):    g_rb_rd_idx == wr_idx
+     *       No new data — nothing to process.
+     */
+
+    /* --- Determine ring buffer read segments --- */
+    uint16_t seg_start;
+    uint16_t seg_end;
+    int      need_second_seg = 0;
+
+    if (g_rb_rd_idx < wr_idx)
     {
-        g_rb_rd_idx = wr_idx;
-        return;
+        /* Case A: single contiguous segment */
+        seg_start = g_rb_rd_idx;
+        seg_end   = wr_idx;
+    }
+    else if (g_rb_rd_idx > wr_idx)
+    {
+        /* Case B: two segments due to wrap */
+        seg_start       = g_rb_rd_idx;
+        seg_end         = LOG_DBG_BUF_SIZE;
+        need_second_seg = 1;
+    }
+    else
+    {
+        /* Case C: no new data */
+        goto _ringbuf_done;
     }
 
-    /* ── IDLE event — process available bytes from ring buffer ─────────── */
-    /* Read bytes from g_rb_rd_idx up to wr_idx, handling ring wrap. */
-
-    /* Segment 1: from rd_idx to end of buffer (if wr_idx wrapped) */
-    while (g_rb_rd_idx < wr_idx)
+    /* --- Process first segment --- */
     {
-        uint8_t ch = g_dma_rx_buf[g_rb_rd_idx];
-        g_rb_rd_idx++;
+        uint16_t i = seg_start;
 
-        /* ── Handle Backspace (0x7F / 0x08) ─────────────────────────── */
-        if (ch == 0x7FU || ch == 0x08U)
+        while (i < seg_end)
         {
-            if (g_dbg_pos > 0U)
+            uint8_t ch = g_dma_rx_buf[i];
+            g_rb_rd_idx = i + 1U;  /* Keep rd_idx in sync even on break */
+
+            /* ── Handle Backspace (0x7F / 0x08) ─────────────────────── */
+            if (ch == 0x7FU || ch == 0x08U)
             {
-                g_dbg_pos--;
-                if (g_dbg_echo != 0U)
+                if (g_dbg_pos > 0U)
                 {
-                    uint8_t bs_seq[] = { 0x08U, 0x20U, 0x08U };
-                    HAL_UART_Transmit(huart, bs_seq, 3U, 100U);
+                    g_dbg_pos--;
+                    if (g_dbg_echo != 0U)
+                    {
+                        uint8_t bs_seq[] = { 0x08U, 0x20U, 0x08U };
+                        HAL_UART_Transmit(huart, bs_seq, 3U, 100U);
+                    }
                 }
+                i++;
+                continue;
             }
-            continue;
-        }
 
-        /* ── Handle End-of-Line: \n or \r ───────────────────────────── */
-        if (ch == '\n' || ch == '\r')
-        {
-            if (g_dbg_pos > 0U)
+            /* ── Handle End-of-Line: \n or \r ───────────────────────── */
+            if (ch == '\n' || ch == '\r')
             {
-                g_dbg_cmd_pending = 1U;
+                if (g_dbg_pos > 0U)
+                {
+                    g_dbg_cmd_pending = 1U;
+                    if (g_dbg_echo != 0U)
+                    {
+                        uint8_t crlf[] = { '\r', '\n' };
+                        HAL_UART_Transmit(huart, crlf, 2U, 100U);
+                    }
+                    /* Line complete — remaining bytes belong to next
+                     * line and will be processed on next IDLE event */
+                    goto _ringbuf_done;
+                }
                 if (g_dbg_echo != 0U)
                 {
                     uint8_t crlf[] = { '\r', '\n' };
                     HAL_UART_Transmit(huart, crlf, 2U, 100U);
                 }
-                /* Stop — remaining bytes will arrive in next IDLE event */
-                break;
+                i++;
+                continue;
             }
-            if (g_dbg_echo != 0U)
+
+            /* ── Handle printable characters ────────────────────────── */
+            if (ch >= 0x20U && ch <= 0x7EU)
             {
-                uint8_t crlf[] = { '\r', '\n' };
-                HAL_UART_Transmit(huart, crlf, 2U, 100U);
+                if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
+                {
+                    g_dbg_buffer[g_dbg_pos++] = (char)ch;
+                    if (g_dbg_echo != 0U)
+                    {
+                        HAL_UART_Transmit(huart, &g_dma_rx_buf[i], 1U, 100U);
+                    }
+                }
             }
-            continue;
+
+            i++;
         }
 
-        /* ── Handle printable characters ────────────────────────────── */
-        if (ch >= 0x20U && ch <= 0x7EU)
+        /* --- Process wrap-around segment (if needed) --- */
+        if (need_second_seg)
         {
-            if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
+            i = 0U;
+            while (i < wr_idx)
             {
-                g_dbg_buffer[g_dbg_pos++] = (char)ch;
-                if (g_dbg_echo != 0U)
+                uint8_t ch = g_dma_rx_buf[i];
+                g_rb_rd_idx = i + 1U;
+
+                /* ── Handle Backspace (0x7F / 0x08) ─────────────────── */
+                if (ch == 0x7FU || ch == 0x08U)
                 {
-                    HAL_UART_Transmit(huart, &g_dma_rx_buf[g_rb_rd_idx - 1U], 1U, 100U);
+                    if (g_dbg_pos > 0U)
+                    {
+                        g_dbg_pos--;
+                        if (g_dbg_echo != 0U)
+                        {
+                            uint8_t bs_seq[] = { 0x08U, 0x20U, 0x08U };
+                            HAL_UART_Transmit(huart, bs_seq, 3U, 100U);
+                        }
+                    }
+                    i++;
+                    continue;
                 }
+
+                /* ── Handle End-of-Line: \n or \r ───────────────────── */
+                if (ch == '\n' || ch == '\r')
+                {
+                    if (g_dbg_pos > 0U)
+                    {
+                        g_dbg_cmd_pending = 1U;
+                        if (g_dbg_echo != 0U)
+                        {
+                            uint8_t crlf[] = { '\r', '\n' };
+                            HAL_UART_Transmit(huart, crlf, 2U, 100U);
+                        }
+                        goto _ringbuf_done;
+                    }
+                    if (g_dbg_echo != 0U)
+                    {
+                        uint8_t crlf[] = { '\r', '\n' };
+                        HAL_UART_Transmit(huart, crlf, 2U, 100U);
+                    }
+                    i++;
+                    continue;
+                }
+
+                /* ── Handle printable characters ────────────────────── */
+                if (ch >= 0x20U && ch <= 0x7EU)
+                {
+                    if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
+                    {
+                        g_dbg_buffer[g_dbg_pos++] = (char)ch;
+                        if (g_dbg_echo != 0U)
+                        {
+                            HAL_UART_Transmit(huart, &g_dma_rx_buf[i], 1U, 100U);
+                        }
+                    }
+                }
+
+                i++;
             }
         }
     }
 
+_ringbuf_done:
     /* DMA runs continuously in CIRCULAR mode — no restart needed here.
      * __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT) was done once in init. */
 }

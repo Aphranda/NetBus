@@ -139,8 +139,105 @@ att
 
 ---
 
-## 编程接口
+### 3. `modbus` — Modbus RTU 主站控制
 
+通过 RS485 (UART8) 发送 Modbus RTU 查询，支持功能码 FC=03 (读保持寄存器) 和 FC=06 (写单个寄存器)。
+
+#### 3.1 读取保持寄存器 (FC=03)
+
+```text
+modbus read <slave> <reg> <qty>
+```
+
+| 参数      | 说明                                |
+| --------- | ----------------------------------- |
+| `<slave>` | 从站地址，范围 1~247                 |
+| `<reg>`   | 起始寄存器地址，范围 0~65535          |
+| `<qty>`   | 读取寄存器数量，范围 1~125            |
+
+**示例：**
+
+```text
+modbus read 1 2 1      读取从站1，寄存器2，读1个
+modbus read 2 0 8      读取从站2，寄存器0，读8个
+```
+
+**示例输出（成功）：**
+```
+[1000] [INFO] Modbus: FC=03 read (slave=1, reg=2, qty=1)
+[1000] [INFO] Modbus: SUCCESS - 1 register(s):
+[1000] [INFO]   reg[2] = 42 (0x002A)
+```
+
+**示例输出（异常）：**
+```
+[2500] [ERR]  Modbus: EXCEPTION (code=0x02: ILLEGAL DATA ADDRESS)
+```
+
+**示例输出（超时）：**
+```
+[5000] [ERR]  Modbus: FAILED - Timeout waiting for response
+```
+
+#### 3.2 写单个寄存器 (FC=06)
+
+```text
+modbus write <slave> <reg> <value>
+```
+
+| 参数      | 说明                                |
+| --------- | ----------------------------------- |
+| `<slave>` | 从站地址，范围 1~247                 |
+| `<reg>`   | 寄存器地址，范围 0~65535             |
+| `<value>` | 写入值，范围 0~65535                 |
+
+**示例：**
+
+```text
+modbus write 1 0 1234     向从站1的寄存器0写入 1234
+modbus write 1 0 0xFF     写入十六进制 0xFF
+modbus write 2 10 0       向从站2的寄存器10写入 0
+```
+
+**示例输出（成功）：**
+```
+[3000] [INFO] Modbus: FC=06 write (slave=1, reg=0, value=1234)
+[3000] [INFO] Modbus: SUCCESS - wrote 1234 to reg[0]
+```
+
+#### 3.3 发送原始数据（透传）
+
+```text
+modbus send <hex bytes...>
+```
+
+| 参数             | 说明                                   |
+| ---------------- | -------------------------------------- |
+| `<hex bytes...>` | 十六进制字节序列，字节间用空格分隔         |
+
+以原始字节形式发送到 RS485 总线，**不附加 CRC**，不等待响应。适用于调试和测试自定义 Modbus 帧。
+
+**示例：**
+
+```text
+modbus send 01 03 00 02 00 01 24 0A   发送 FC=03 查询（含 CRC）
+modbus send 01 06 00 00 04 D2 09 A5   发送 FC=06 写入（含 CRC）
+```
+
+> **注意：** `modbus send` 为纯透传模式，需自行计算并附加 CRC 校验值。
+> `modbus read` 和 `modbus write` 使用 Modbus 库自动处理 CRC、等待响应并解析数据。
+
+#### 3.4 查看用法
+
+```text
+modbus
+```
+
+不带参数时显示命令帮助信息。
+
+---
+
+## 编程接口
 ### 注册自定义命令
 
 ```c
@@ -175,15 +272,23 @@ Log_DbgSetEcho(1);  // 开启串口回显（默认）
 ```
 main()
  ├─ MX_UART7_Init()            ← HAL 初始化 UART7
- ├─ App_RegisterModule(&g_log_task_module)
+ ├─ App_RegisterModule(&g_log_task_module)     ← Log 模块注册（优先）
+ ├─ App_RegisterModule(&g_rs485_task_module)   ← RS485 模块注册
  ├─ App_Task_Init()
- │   └─ _log_task_init()
- │       └─ Log_Init()         ← 启动 Log 模块，注册内置命令
- │           └─ Log_InitEx()
- │               ├─ Log_RegisterDbgCmd("help", ...)
- │               ├─ Log_RegisterDbgCmd("att",  ...)
- │               └─ HAL_UART_Receive_IT()  ← 启动 RX 中断
+ │   ├─ _log_task_init()
+ │   │   └─ Log_Init()         ← 启动 Log 模块，注册内置命令
+ │   │       └─ Log_InitEx()
+ │   │           ├─ Log_RegisterDbgCmd("help", ...)
+ │   │           ├─ Log_RegisterDbgCmd("att",  ...)
+ │   │           └─ HAL_UART_Receive_IT()  ← 启动 RX 中断
+ │   │
+ │   └─ _rs485_task_init()
+ │       └─ RS485_Init()       ← 启动 RS485 (UART8 DMA CIRCULAR + IDLE)
+ │           └─ Log_RegisterDbgCmd("modbus", _dbg_cmd_modbus)  ← 注册 modbus 命令
+ │
  └─ App_Task_Loop()
-     └─ _log_task_process()
-         └─ Log_DbgProcess()   ← 主循环中处理待解析命令
+     ├─ _log_task_process()
+     │   └─ Log_DbgProcess()   ← 主循环中处理待解析命令
+     └─ _rs485_task_process()
+         └─ 检查 RS485 接收数据 ← 非 Modbus 事务期间打印 RX 数据
 ```
