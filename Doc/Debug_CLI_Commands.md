@@ -292,3 +292,93 @@ main()
      └─ _rs485_task_process()
          └─ 检查 RS485 接收数据 ← 非 Modbus 事务期间打印 RX 数据
 ```
+
+---
+
+### 4. `can` — CAN 总线控制
+
+通过 FDCAN1 (PD0-RX, PD1-TX) 发送和接收 CAN 帧。支持经典 CAN 模式，11 位标准 ID。
+
+#### 4.1 发送 CAN 帧
+
+```text
+can send <id> <hex data...>
+```
+
+| 参数             | 说明                                      |
+| ---------------- | ----------------------------------------- |
+| `<id>`           | CAN ID，范围 0x000~0x7FF（十进制或十六进制） |
+| `<hex data...>`  | 数据字节，空格分隔，最多 8 字节              |
+
+**示例：**
+```text
+can send 0x101 01         发送 ID=0x101, DLC=1, Data=01
+can send 0x123 01 02 03 04 发送 ID=0x123, DLC=4
+```
+
+#### 4.2 查看 CAN 状态
+
+```text
+can status
+```
+
+**示例输出：**
+```
+[1000] [INFO] CAN: TX_ErrCnt=0, RX_ErrCnt=0
+[1000] [INFO] CAN: Bus-Off=NO
+[1000] [INFO] CAN: RxFIFO0 pending=0
+```
+
+#### 4.3 查询检波板 SN
+
+通过 CAN 0x101 命令读取 A1 检波板的序列号（SN）。
+
+```text
+can sn <node_id>
+```
+
+| 参数        | 说明                                       |
+| ----------- | ------------------------------------------ |
+| `<node_id>` | 目标节点 ID，范围 0x00~0xFF（0xFF 为广播）    |
+
+**协议说明（参考 V3.x A1 检波板指令）：**
+
+| 项目           | 内容                                      |
+| -------------- | ----------------------------------------- |
+| 请求帧 ID      | `0x101`                                    |
+| 请求帧数据     | Byte0 = Node ID                            |
+| 响应帧 ID      | Node ID（目标节点回显自身 ID）               |
+| 响应帧 Byte0   | `0x01`（命令字回显）                        |
+| 响应帧 Byte1   | `0x00` 成功，`0x01` 失败                    |
+| 响应帧 Byte2   | SN 字符串长度（0~61，0 表示未写入或损坏）    |
+| 响应帧 Byte3+  | SN 字符串内容（可打印 ASCII，不带 \\0 结尾） |
+
+**示例：**
+```text
+can sn 1
+```
+
+**示例输出（成功）：**
+```
+[1000] [INFO] CAN: querying SN via 0x101, node ID=0x01...
+[1000] [INFO] CAN: sending ID=0x101, DLC=1, Data=01
+[1200] [INFO] CAN: SN query success (len=16)
+[1200] [INFO] CAN: SN = 'A1PA-2025-000001'
+```
+
+**示例输出（SN 为空/未写入）：**
+```
+[1000] [INFO] CAN: querying SN via 0x101, node ID=0x01...
+[1000] [INFO] CAN: sending ID=0x101, DLC=1, Data=01
+[1200] [INFO] CAN: SN is empty or not programmed yet
+```
+
+**示例输出（超时/无响应）：**
+```
+[1000] [WARN] CAN: SN query timeout (no response within 500 ms)
+```
+
+> **注意：** SN 存储在检波板内部 Flash 的 SN 存储页（0x0801D800 ~ 0x0801DFFF），格式为"长度 + 可打印 ASCII 字符串内容"。
+> `can sn` 命令发送查询后会等待最多 500ms 的响应超时。
+> 若总线有多节点，响应会以节点 ID 作为响应帧 ID，因此不会相互混淆。
+```

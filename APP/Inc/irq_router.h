@@ -54,6 +54,7 @@ void DMA1_Stream2_IRQHandler(void);
 void DMA1_Stream3_IRQHandler(void);
 void UART7_IRQHandler(void);
 void UART8_IRQHandler(void);
+void FDCAN1_IT0_IRQHandler(void);
 
 #ifdef __cplusplus
 }

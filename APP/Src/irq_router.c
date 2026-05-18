@@ -37,6 +37,7 @@
 #include "irq_router.h"
 #include "usart.h"
 #include "dma.h"
+#include "fdcan.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -116,4 +117,19 @@ void DMA1_Stream2_IRQHandler(void)
 void DMA1_Stream3_IRQHandler(void)
 {
     HAL_DMA_IRQHandler(huart8.hdmatx);
+}
+
+/* ── FDCAN1 ───────────────────────────────────────────────────────────────── */
+
+/**
+  * @brief  FDCAN1 Interrupt line 0 handler
+  * @note   Overrides weak default from startup_stm32h743zitx.s.
+  *         Delegates to HAL_FDCAN_IRQHandler(), which dispatches to:
+  *           - HAL_FDCAN_RxFifo0Callback()  [can.c]
+  *           - HAL_FDCAN_TxFifoQueueCallback() [can.c]
+  *           - HAL_FDCAN_ErrorCallback()     [can.c]
+  */
+void FDCAN1_IT0_IRQHandler(void)
+{
+    HAL_FDCAN_IRQHandler(&hfdcan1);
 }

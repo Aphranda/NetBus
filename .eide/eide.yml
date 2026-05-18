@@ -36,6 +36,7 @@ targets:
         - ThirdParty/IO/Inc
         - ThirdParty/RS485/Inc
         - ThirdParty/Modbus/Inc
+        - ThirdParty/CAN/Inc
       libList: []
     excludeList: []
     settings: {}
