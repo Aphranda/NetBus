@@ -76,31 +76,31 @@ extern "C" {
   * @note  Usage: LOG_ERROR("Failed to init sensor, err=%d", status);
   */
 #if (LOG_LEVEL >= LOG_LEVEL_ERROR)
-#define LOG_ERROR(fmt, ...)    Log_Print(LOG_LEVEL_ERROR, "[ERR]  " fmt "\r\n", ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...)    Log_Print(LOG_LEVEL_ERROR, fmt "\r\n", ##__VA_ARGS__)
 #else
 #define LOG_ERROR(fmt, ...)    ((void)0U)
 #endif
 
 #if (LOG_LEVEL >= LOG_LEVEL_WARN)
-#define LOG_WARN(fmt, ...)     Log_Print(LOG_LEVEL_WARN,  "[WARN] " fmt "\r\n", ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...)     Log_Print(LOG_LEVEL_WARN,  fmt "\r\n", ##__VA_ARGS__)
 #else
 #define LOG_WARN(fmt, ...)     ((void)0U)
 #endif
 
 #if (LOG_LEVEL >= LOG_LEVEL_INFO)
-#define LOG_INFO(fmt, ...)     Log_Print(LOG_LEVEL_INFO,  "[INFO] " fmt "\r\n", ##__VA_ARGS__)
+#define LOG_INFO(fmt, ...)     Log_Print(LOG_LEVEL_INFO,  fmt "\r\n", ##__VA_ARGS__)
 #else
 #define LOG_INFO(fmt, ...)     ((void)0U)
 #endif
 
 #if (LOG_LEVEL >= LOG_LEVEL_DEBUG)
-#define LOG_DEBUG(fmt, ...)    Log_Print(LOG_LEVEL_DEBUG, "[DEBUG]" fmt "\r\n", ##__VA_ARGS__)
+#define LOG_DEBUG(fmt, ...)    Log_Print(LOG_LEVEL_DEBUG, fmt "\r\n", ##__VA_ARGS__)
 #else
 #define LOG_DEBUG(fmt, ...)    ((void)0U)
 #endif
 
 #if (LOG_LEVEL >= LOG_LEVEL_VERBOSE)
-#define LOG_VERBOSE(fmt, ...)  Log_Print(LOG_LEVEL_VERBOSE,"[VERB] " fmt "\r\n", ##__VA_ARGS__)
+#define LOG_VERBOSE(fmt, ...)  Log_Print(LOG_LEVEL_VERBOSE, fmt "\r\n", ##__VA_ARGS__)
 #else
 #define LOG_VERBOSE(fmt, ...)  ((void)0U)
 #endif
