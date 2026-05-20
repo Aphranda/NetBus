@@ -32,6 +32,7 @@
 #include "app_task.h"
 #include "log_task.h"
 #include "rs485_task.h"
+#include "detector_task.h"
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
@@ -87,6 +88,13 @@ App_Status_t App_Init(void)
 
     /* ── Register RS485 task ───────────────────────────────────────────────── */
     status = App_RegisterModule(&g_rs485_task_module);
+    if (status != APP_OK)
+    {
+        return status;
+    }
+
+    /* ── Register Detector task ─────────────────────────────────────────────── */
+    status = App_RegisterModule(&g_detector_task_module);
     if (status != APP_OK)
     {
         return status;
