@@ -2,12 +2,12 @@
 /**
   ******************************************************************************
   * @file    can.c
-  * @brief   CAN driver implementation — FDCAN1, classic CAN mode
+  * @brief   CAN driver implementation — FDCAN1, CAN FD mode
   *
   *          Architecture (follows RS485 module pattern):
   *
   *            ┌─ MX_FDCAN1_Init()                          ← CubeMX generated
-  *            │    (configured in fdcan.c with proper FIFO/TX buffer counts)
+  *            │    (configured in fdcan.c with CAN FD + BRS, 64-byte data)
   *            │
   *            ├─ CAN_Init()
   *            │    ├─ ConfigGlobalFilter(accept all → Rx FIFO 0)
@@ -92,6 +92,44 @@ static struct {
 
 /* Private function prototypes -----------------------------------------------*/
 
+/* ── DLC conversion utilities ─────────────────────────────────────────────── */
+
+/**
+  * @brief  Convert CAN FD DLC code to actual byte count
+  * @param  dlc_code  DLC code from FDCAN header (0-15)
+  * @retval Actual byte count
+  */
+uint8_t CAN_DLCToBytes(uint8_t dlc_code)
+{
+    static const uint8_t table[] = {
+        0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U,
+        8U, 12U, 16U, 20U, 24U, 32U, 48U, 64U
+    };
+
+    if (dlc_code > 15U)
+    {
+        return 0U;
+    }
+    return table[dlc_code];
+}
+
+/**
+  * @brief  Convert byte count to CAN FD DLC code for TX header
+  * @param  bytes  Actual byte count (0-64)
+  * @retval DLC code (0-15)
+  */
+uint8_t CAN_BytesToDLC(uint8_t bytes)
+{
+    if (bytes <= 8U)     return bytes;
+    if (bytes <= 12U)    return 9U;
+    if (bytes <= 16U)    return 10U;
+    if (bytes <= 20U)    return 11U;
+    if (bytes <= 24U)    return 12U;
+    if (bytes <= 32U)    return 13U;
+    if (bytes <= 48U)    return 14U;
+    return 15U;  /* up to 64 bytes */
+}
+
 /* ── Ring buffer helpers ──────────────────────────────────────────────────── */
 
 /**
@@ -146,13 +184,9 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
         return;
     }
 
-    /* Decode header */
+    /* Decode header: DataLength is the DLC code (0-15), convert to byte count */
     msg.id  = rx_header.Identifier & CAN_STD_ID_MASK;
-    msg.dlc = (uint8_t)(rx_header.DataLength & 0x0FU);
-    if (msg.dlc > CAN_MAX_DATA_LEN)
-    {
-        msg.dlc = CAN_MAX_DATA_LEN;
-    }
+    msg.dlc = CAN_DLCToBytes((uint8_t)(rx_header.DataLength & 0x0FU));
 
     /* Dispatch: callback → ring buffer fallback */
     if (g_can.rx_callback != NULL)
@@ -277,15 +311,19 @@ HAL_StatusTypeDef CAN_Send(const CAN_Msg_t *msg)
         return HAL_ERROR;
     }
 
+    /* Decide frame format: use CAN FD for payloads > 8 bytes */
+    uint8_t  is_fd     = (msg->dlc > 8U) ? 1U : 0U;
+    uint8_t  dlc_code  = CAN_BytesToDLC(msg->dlc);
+
     /* Prepare Tx header */
     FDCAN_TxHeaderTypeDef tx_header;
     tx_header.Identifier          = msg->id & CAN_STD_ID_MASK;
     tx_header.IdType              = FDCAN_STANDARD_ID;
     tx_header.TxFrameType         = FDCAN_DATA_FRAME;
-    tx_header.DataLength          = (uint32_t)(msg->dlc <= CAN_MAX_DATA_LEN ? msg->dlc : CAN_MAX_DATA_LEN);
+    tx_header.DataLength          = dlc_code;
     tx_header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    tx_header.BitRateSwitch       = FDCAN_BRS_OFF;
-    tx_header.FDFormat            = FDCAN_CLASSIC_CAN;
+    tx_header.BitRateSwitch       = is_fd ? FDCAN_BRS_ON : FDCAN_BRS_OFF;
+    tx_header.FDFormat            = is_fd ? FDCAN_FD_CAN : FDCAN_CLASSIC_CAN;
     tx_header.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
     tx_header.MessageMarker       = 0U;
 
@@ -341,15 +379,19 @@ HAL_StatusTypeDef CAN_Send_IT(const CAN_Msg_t *msg)
         return HAL_BUSY;
     }
 
+    /* Decide frame format: use CAN FD for payloads > 8 bytes */
+    uint8_t  is_fd     = (msg->dlc > 8U) ? 1U : 0U;
+    uint8_t  dlc_code  = CAN_BytesToDLC(msg->dlc);
+
     /* Prepare Tx header */
     FDCAN_TxHeaderTypeDef tx_header;
     tx_header.Identifier          = msg->id & CAN_STD_ID_MASK;
     tx_header.IdType              = FDCAN_STANDARD_ID;
     tx_header.TxFrameType         = FDCAN_DATA_FRAME;
-    tx_header.DataLength          = (uint32_t)(msg->dlc <= CAN_MAX_DATA_LEN ? msg->dlc : CAN_MAX_DATA_LEN);
+    tx_header.DataLength          = dlc_code;
     tx_header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    tx_header.BitRateSwitch       = FDCAN_BRS_OFF;
-    tx_header.FDFormat            = FDCAN_CLASSIC_CAN;
+    tx_header.BitRateSwitch       = is_fd ? FDCAN_BRS_ON : FDCAN_BRS_OFF;
+    tx_header.FDFormat            = is_fd ? FDCAN_FD_CAN : FDCAN_CLASSIC_CAN;
     tx_header.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
     tx_header.MessageMarker       = 0U;
 

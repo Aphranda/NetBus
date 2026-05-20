@@ -2,11 +2,11 @@
 /**
   ******************************************************************************
   * @file    can.h
-  * @brief   CAN driver for FDCAN1 (classic CAN mode)
+  * @brief   CAN driver for FDCAN1 (CAN FD mode)
   *
   *          Hardware:
   *            FDCAN1: PD0 (RX), PD1 (TX), AF9
-  *            Mode:   Classic CAN (FDCAN_FRAME_CLASSIC)
+  *            Mode:   CAN FD with BRS (FDCAN_FRAME_FD_BRS)
   *
   *          Architecture:
   *            - Uses HAL_FDCAN driver on top of MX_FDCAN1_Init().
@@ -46,9 +46,9 @@ extern "C" {
 #define CAN_STD_ID_MASK         0x7FFU
 
 /**
-  * @brief Maximum CAN data length (classic CAN)
+  * @brief Maximum CAN data length (CAN FD, up to 64 bytes)
   */
-#define CAN_MAX_DATA_LEN        8U
+#define CAN_MAX_DATA_LEN        64U
 
 /**
   * @brief Default CAN timeout for blocking transmit (milliseconds)
@@ -58,13 +58,33 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 
 /**
-  * @brief CAN message structure (classic CAN / 11-bit ID)
+  * @brief CAN message structure (CAN FD, 11-bit ID by default)
+  *
+  * @note  dlc stores the actual byte count (0-64), NOT the DLC code (0-15).
+  *        Conversion to/from DLC code is handled internally in can.c.
+  *        For dlc > 8, the frame is automatically sent in CAN FD format.
   */
 typedef struct {
-    uint32_t id;                    /*!< Standard CAN ID (11-bit, 0x000-0x7FF) */
-    uint8_t  data[CAN_MAX_DATA_LEN]; /*!< Data bytes                             */
-    uint8_t  dlc;                   /*!< Data length code (0-8)                 */
+    uint32_t id;                       /*!< Standard CAN ID (11-bit, 0x000-0x7FF) */
+    uint8_t  data[CAN_MAX_DATA_LEN];   /*!< Data bytes (up to 64 for CAN FD)      */
+    uint8_t  dlc;                      /*!< Data byte count (0-64)                */
 } CAN_Msg_t;
+
+/* Exported utility functions -------------------------------------------------*/
+
+/**
+  * @brief  Convert CAN FD DLC code (0-15) to actual byte count (0-64)
+  * @param  dlc_code  DLC code from FDCAN header (0-15)
+  * @retval Actual byte count (0, 1-8, 12, 16, 20, 24, 32, 48, 64)
+  */
+uint8_t CAN_DLCToBytes(uint8_t dlc_code);
+
+/**
+  * @brief  Convert byte count to CAN FD DLC code for TX header
+  * @param  bytes  Actual byte count (0-64)
+  * @retval DLC code (0-15) suitable for FDCAN_TxHeaderTypeDef.DataLength
+  */
+uint8_t CAN_BytesToDLC(uint8_t bytes);
 
 /**
   * @brief CAN RX frame callback

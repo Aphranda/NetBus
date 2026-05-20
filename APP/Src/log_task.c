@@ -186,7 +186,7 @@ static App_Status_t _log_task_init(void)
         LOG_ERROR("Log_Task: CAN_Init() failed");
         return APP_ERROR;
     }
-    LOG_INFO("Log_Task: CAN initialized (FDCAN1, Classic CAN)");
+    LOG_INFO("Log_Task: CAN initialized (FDCAN1, CAN FD with BRS)");
 
     /* ── Register "cansn" debug CLI command ───────────────────────────── */
     if (Log_RegisterDbgCmd("cansn", _dbg_cmd_cansn) != HAL_OK)
@@ -390,13 +390,14 @@ static void _dbg_cmd_cansn(int argc, char **argv)
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'cansend' debug CLI command — send raw CAN frame
+  * @brief  'cansend' debug CLI command — send raw CAN/CAN FD frame
   *
   *         Usage:
   *           cansend <id> <hex bytes...>
   *             - Send a raw CAN frame with specified ID and data bytes
   *             - ID: CAN identifier (decimal or 0x hex), 0x000-0x7FF
-  *             - hex bytes: space-separated hex byte values (0-8 bytes)
+  *             - hex bytes: space-separated hex byte values (1-64 bytes)
+  *             - Frames with >8 bytes are automatically sent as CAN FD
   *             - Example: cansend 0x101 01          (SN query to node 1)
   *             - Example: cansend 0x101 01 02 03    (3-byte data frame)
   */
@@ -712,7 +713,7 @@ static int _can_hex_to_byte(const char *hex, uint8_t *out)
   */
 static void _can_print_hex(const char *prefix, const uint8_t *data, uint16_t len)
 {
-    char hex_str[128U];
+    char hex_str[256U];
     int  pos = 0;
 
     for (uint16_t i = 0U; i < len; i++)
