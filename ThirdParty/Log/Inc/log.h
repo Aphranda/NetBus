@@ -146,7 +146,7 @@ void Log_DbgProcess(void);
   * @param  func  Callback function to handle the command
   * @retval HAL_OK on success
   * @retval HAL_ERROR if command table is full
-  * @note   Built-in commands ("help", "att") are registered automatically
+  * @note   Built-in command ("help") is registered automatically
   *         during Log_InitEx(). Call this after Log_Init() to add more.
   */
 HAL_StatusTypeDef Log_RegisterDbgCmd(const char *cmd, Log_DbgCmdFunc_t func);

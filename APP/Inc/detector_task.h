@@ -220,6 +220,8 @@ typedef enum {
 
 /* Exported variables --------------------------------------------------------*/
 
+extern const App_Module_t g_detector_task_module;
+
 /* Exported functions --------------------------------------------------------*/
 
 /** @brief Debug CLI handler for "detector" command — registered by log_task */

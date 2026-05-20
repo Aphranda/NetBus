@@ -31,6 +31,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "app_task.h"
 #include "log_task.h"
+#include "attenuator_task.h"
 #include "rs485_task.h"
 #include "detector_task.h"
 #include <string.h>
@@ -81,6 +82,13 @@ App_Status_t App_Init(void)
 
     /* ── Register Log task first — must be first so other modules can log during init ─ */
     status = App_RegisterModule(&g_log_task_module);
+    if (status != APP_OK)
+    {
+        return status;
+    }
+
+    /* ── Register Attenuator task ────────────────────────────────────────────── */
+    status = App_RegisterModule(&g_attenuator_task_module);
     if (status != APP_OK)
     {
         return status;
