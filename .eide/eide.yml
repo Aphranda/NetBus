@@ -114,7 +114,8 @@ targets:
         - Drivers/CMSIS/Include
         - ThirdParty/Log/Inc
       libList: []
-    excludeList: []
+    excludeList:
+      - "**/stm32h7xx_it.c"
     settings: {}
     toolchain: GCC
     toolchainConfigMap:

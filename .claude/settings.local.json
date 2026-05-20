@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 \"C:\\\\Users\\\\Aphranda\\\\.eide\\\\bin\\\\python36\\\\python3.exe\" -c \"print\\('checking python'\\)\")",
+      "Bash(npx eide *)",
+      "Bash(ls \"C:/Users/Aphranda/.eide/tools/gcc_arm/bin/arm-none-eabi-gcc.exe\" 2>/dev/null && echo \"GCC found\" || echo \"GCC not found\")",
+      "Read(//c/Users/Aphranda/.eide/tools/gcc_arm/bin/**)",
+      "Bash(C:/Users/Aphranda/.eide/tools/gcc_arm/bin/arm-none-eabi-nm /tmp/irq_router.o)"
+    ]
+  }
+}
