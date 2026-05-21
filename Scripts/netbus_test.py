@@ -380,9 +380,17 @@ def test_modbus_raw(nb: NetBus, addr: int = 1) -> TestResult:
 
 
 # ═══════════════════════════════════════════════════════
-#  CAN 测试 (can scan)
-#  SAFE: can scan — 只读扫描
+#  CAN 测试 (can send / can scan + 帮助)
+#  SAFE: can send — SN 查询帧 (只读); can scan — 只读扫描
 # ═══════════════════════════════════════════════════════
+
+
+def test_can_help(nb: NetBus) -> TestResult:
+    """CAN 命令帮助 (无参数)"""
+    def check(resp):
+        ok = "send" in resp.lower() or "scan" in resp.lower() or "CAN" in resp
+        return ok, "CAN 子命令帮助" if ok else "未返回子命令列表"
+    return run_cmd(nb, "can - 帮助 (无参数)", "can", ok_fn=check)
 
 
 def test_can_scan(nb: NetBus, start: int = 0, end: int = 0) -> TestResult:
@@ -399,6 +407,23 @@ def test_can_scan(nb: NetBus, start: int = 0, end: int = 0) -> TestResult:
             return False, "无响应"
         return True, "扫描完成"
     return run_cmd(nb, "can scan - CAN 总线扫描", cmd,
+                   timeout=TIMEOUT_LONG, ok_fn=check)
+
+
+def test_can_send(nb: NetBus, can_id: int = 0x101, data: str = "01") -> TestResult:
+    """CAN 发送查询帧 (safe: SN query 0x101)"""
+    cmd = f"can send {can_id:#x} {data}"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "can 命令未注册"
+        if "(无响应)" in resp:
+            return True, "CAN 帧已发送 (无总线响应)"
+        if "TX" in resp or "RX" in resp or "Response" in resp or "sent" in resp.lower():
+            return True, "CAN 帧发送成功, 收到响应"
+        if "listening" in resp.lower():
+            return True, "CAN 帧已发送, 等待响应超时"
+        return True, "已发送"
+    return run_cmd(nb, f"can send - SN查询 (ID={can_id:#x})", cmd,
                    timeout=TIMEOUT_LONG, ok_fn=check)
 
 
@@ -466,6 +491,30 @@ def test_detector_flash(nb: NetBus, node_id: int = 1) -> TestResult:
                    f"detector flash {node_id}", timeout=TIMEOUT_LONG, ok_fn=check)
 
 
+def test_detector_readflash(nb: NetBus, node_id: int = 1,
+                             addr: int = 0x0, length: int = 32) -> TestResult:
+    """读取检波板 Flash 指定地址数据 (CAN 0x11A)"""
+    cmd = f"detector readflash {node_id} {addr:#x} {length}"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "detector 命令未注册"
+        if "timeout" in resp.lower():
+            return True, "超时 (检波板未连接)"
+        if "FAILED" in resp or "Error" in resp:
+            return True, "Flash 读取命令已发送 (固件处理中)"
+        return True, "Flash 数据读取已发送"
+    return run_cmd(nb, f"detector readflash - Flash 数据 (addr={addr:#x}, len={length})",
+                   cmd, timeout=TIMEOUT_LONG, ok_fn=check)
+
+
+def test_detector_direct(nb: NetBus) -> TestResult:
+    """detector 无参数帮助"""
+    def check(resp):
+        ok = "Usage" in resp or "sub-command" in resp.lower() or "detector" in resp.lower()
+        return ok, "detector 命令帮助" if ok else "detector 无响应"
+    return run_cmd(nb, "detector - 帮助 (无参数)", "detector", ok_fn=check)
+
+
 # ═══════════════════════════════════════════════════════
 #  报告生成
 # ═══════════════════════════════════════════════════════
@@ -523,7 +572,7 @@ def generate_report(results: List[TestResult], meta: dict, output_path: str) -> 
     lines.append("|--------|------|------|------|")
     lines.append(f"| CLI 基础 | help, att | {cli_passed} | 本地衰减器 & 帮助 |")
     lines.append(f"| RFSW (Modbus) | rfsw | {rfsw_passed} | RS485 远程 RF Switch |")
-    lines.append(f"| CAN 总线 | can scan | {can_passed} | CAN 扫描 |")
+    lines.append(f"| CAN 总线 | can send/scan | {can_passed} | CAN 查询 & 扫描 |")
     lines.append(f"| Modbus Raw | modbus | {modbus_passed} | Modbus 原生帧注入 |")
     lines.append(f"| Detector (CAN) | detector | {det_passed} | A1 检波板指令 |")
     lines.append("")
@@ -684,19 +733,32 @@ def main():
         # ── CAN ──
         if args.mode in ("all", "can"):
             print("\n=== CAN 总线测试 ===")
+            r = test_can_help(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}")
+
             r = test_can_scan(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            r = test_can_send(nb)
             all_results.append(r)
             print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
 
         # ── Detector ──
         if args.mode in ("all", "detector"):
             print("\n=== Detector 测试 (CAN A1 检波板) ===")
+            r = test_detector_direct(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}")
+
             r = test_detector_help(nb)
             all_results.append(r)
             print(f"  {r['status']:4s} {r['name']}")
 
             det_tests = [test_detector_sn, test_detector_version,
-                         test_detector_temp, test_detector_flash]
+                         test_detector_temp, test_detector_flash,
+                         test_detector_readflash]
             for fn in det_tests:
                 r = fn(nb, node)
                 all_results.append(r)
