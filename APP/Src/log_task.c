@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "log_task.h"
 #include "can.h"
+#include "scpi-def.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -176,6 +177,10 @@ static App_Status_t _log_task_init(void)
     }
     LOG_INFO("Log_Task: CAN initialized (FDCAN1, CAN FD with BRS)");
 
+    /* ── Initialize SCPI subsystem ─────────────────────────────────────── */
+    SCPI_SystemInit();
+    LOG_INFO("Log_Task: SCPI initialized (%u commands)", 44U);
+
     /* ── Register "can" debug CLI command ─────────────────────────────── */
     if (Log_RegisterDbgCmdEx("can", _dbg_cmd_can, "CAN bus control (send/scan)") != HAL_OK)
     {
@@ -190,15 +195,38 @@ static App_Status_t _log_task_init(void)
 }
 
 /**
-  * @brief  Log task periodic process — currently no-op
-  * @note   Log is event-driven (called by other modules via LOG_* macros).
-  *         Reserved for future use (e.g., periodic flush or stats).
+  * @brief  Log task periodic process — SCPI-first, debug CLI fallback
+  * @note   Priority: SCPI parser → debug CLI (if DIAG:DEBUG ON)
+  *         Call this periodically from the main loop.
   * @retval APP_OK
   */
 static App_Status_t _log_task_process(void)
 {
-    /* Process any pending debug commands from UART RX */
-    Log_DbgProcess();
+    /* Check for pending command line from UART7 DMA RX */
+    char line[256];
+    uint8_t len = Log_DbgPeekLine(line, sizeof(line) - 1);
+
+    if (len == 0U)
+    {
+        return APP_OK;
+    }
+
+    /* Try SCPI parser first */
+    if (SCPI_TryParse(line))
+    {
+        /* SCPI recognized and handled the command */
+        Log_DbgConsume();
+    }
+    else if (Log_DbgIsEnabled())
+    {
+        /* SCPI didn't recognize it — fall back to debug CLI */
+        Log_DbgProcess();
+    }
+    else
+    {
+        /* Neither SCPI nor debug CLI can handle it — discard */
+        Log_DbgConsume();
+    }
 
     return APP_OK;
 }

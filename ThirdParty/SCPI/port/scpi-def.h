@@ -1,30 +1,36 @@
-/*-
- * BSD 2-Clause License
- *
- * Copyright (c) 2012-2018, Jan Breuer
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * * Redistributions of source code must retain the above copyright notice, this
- *   list of conditions and the following disclaimer.
- *
- * * Redistributions in binary form must reproduce the above copyright notice,
- *   this list of conditions and the following disclaimer in the documentation
- *   and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file    scpi-def.h
+  * @brief   NetBus SCPI command definitions and port layer declarations
+  *
+  *          Architecture:
+  *            - SCPI parser (ThirdParty/SCPI) runs as primary command interface
+  *              on UART7, sharing the Log module's DMA RX pipeline.
+  *            - When DIAGnostic:DEBUg ON is issued, unrecognized commands fall
+  *              through to the legacy debug CLI parser.
+  *            - TX output uses Log_Print() via the SCPI_Write() callback.
+  *
+  *          SCPI command tree:
+  *            IEEE 488.2  → *IDN?, *RST, *CLS, *STB?, *WAI, *OPC?
+  *            SYSTem      → ATTenuator, COMMunicate:CAN, DETector, ERRor
+  *            SENSe       → DETector:CONTrol, STOP, TEMPerature, POWer, BAND
+  *            SOURce      → DETector:FREQuency, POWer
+  *            ROUTe       → SWITch (RFSW Modbus), DETector:SWITch
+  *            STATus      → OPERation, QUEStionable
+  *            DIAGnostic  → DEBUg, ECHO
+  *
+  *          Reference:
+  *            Doc/SCPI_Commands.md — Full SCPI command reference
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 NetBus Project
+  * All rights reserved.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
 
 #ifndef __SCPI_DEF_H_
 #define __SCPI_DEF_H_
@@ -34,48 +40,118 @@ extern "C" {
 
 #include "scpi/scpi.h"
 
-/* Flash 配置存储 */
-#include "flash.h"
-
-#define SCPI_INPUT_BUFFER_LENGTH 256
-#define SCPI_ERROR_QUEUE_SIZE 17
-#define SCPI_IDN1 "GTS"
-#define SCPI_IDN2 "PPA_SP10T"
-#define SCPI_IDN3 "20260417"
-#define SCPI_IDN4 "V0.0.1"
+/* SCPI configuration */
+#define SCPI_INPUT_BUFFER_LENGTH    256U
+#define SCPI_ERROR_QUEUE_SIZE       17U
+#define SCPI_IDN1                   "NetBus"
+#define SCPI_IDN2                   "PPA-NB100"
+#define SCPI_IDN3                   "00000000"
+#define SCPI_IDN4                   "v1.0.0"
 
 extern const scpi_command_t scpi_commands[];
-extern scpi_interface_t scpi_interface;
-extern char scpi_input_buffer[];
-extern scpi_error_t scpi_error_queue_data[];
-extern scpi_t scpi_context;
+extern scpi_interface_t     scpi_interface;
+extern char                 scpi_input_buffer[];
+extern scpi_error_t         scpi_error_queue_data[];
+extern scpi_t               scpi_context;
 
-size_t SCPI_Write(scpi_t * context, const char * data, size_t len);
-int SCPI_Error(scpi_t * context, int_fast16_t err);
-scpi_result_t SCPI_Control(scpi_t * context, scpi_ctrl_name_t ctrl, scpi_reg_val_t val);
-scpi_result_t SCPI_Reset(scpi_t * context);
-scpi_result_t SCPI_Flush(scpi_t * context);
+/* ── Port layer (scpi_port.c) ─────────────────────────────────────────────── */
 
-/* SCPI USART1 接收接口 */
-void     SCPI_RxPutChar(uint8_t ch);
-uint8_t* SCPI_GetRxBuffer(void);
-uint8_t  SCPI_IsRxReady(void);
-void     SCPI_RxClearReady(void);
-uint16_t SCPI_GetRxLength(void);
+size_t        SCPI_Write(scpi_t *context, const char *data, size_t len);
+int           SCPI_Error(scpi_t *context, int_fast16_t err);
+scpi_result_t SCPI_Control(scpi_t *context, scpi_ctrl_name_t ctrl, scpi_reg_val_t val);
+scpi_result_t SCPI_Reset(scpi_t *context);
+scpi_result_t SCPI_Flush(scpi_t *context);
 
-/* ========================================================================== */
-/*              Flash 配置 SCPI 回调                                           */
-/* ========================================================================== */
+/* ── SCPI lifecycle ───────────────────────────────────────────────────────── */
 
-scpi_result_t SCPI_SystemConfigureIdentity(scpi_t *context);
-scpi_result_t SCPI_SystemConfigureIdentityQ(scpi_t *context);
-scpi_result_t SCPI_SystemConfigureName(scpi_t *context);
-scpi_result_t SCPI_SystemConfigureNameQ(scpi_t *context);
-scpi_result_t SCPI_SystemConfigureSerial(scpi_t *context);
-scpi_result_t SCPI_SystemConfigureSerialQ(scpi_t *context);
-scpi_result_t SCPI_SystemConfigureSave(scpi_t *context);
-scpi_result_t SCPI_SystemConfigureDefaults(scpi_t *context);
-scpi_result_t SCPI_SystemConfigureStatusQ(scpi_t *context);
+/**
+  * @brief  Initialize the SCPI subsystem — call once after Log_Init()
+  */
+void SCPI_SystemInit(void);
+
+/**
+  * @brief  Try to parse a command line as SCPI
+  * @param  line  Null-terminated command string (without line terminators)
+  * @retval TRUE if SCPI recognized and handled the command
+  * @retval FALSE if the command was not recognized
+  */
+scpi_bool_t SCPI_TryParse(const char *line);
+
+/* ── IEEE 488.2 common commands ───────────────────────────────────────────── */
+
+scpi_result_t SCPI_CoreIdnQ(scpi_t *context);
+scpi_result_t SCPI_CoreRst(scpi_t *context);
+scpi_result_t SCPI_CoreCls(scpi_t *context);
+scpi_result_t SCPI_CoreStbQ(scpi_t *context);
+scpi_result_t SCPI_CoreWai(scpi_t *context);
+scpi_result_t SCPI_CoreOpcQ(scpi_t *context);
+
+/* ── SYSTem subsystem ─────────────────────────────────────────────────────── */
+
+/* ATTenuator */
+scpi_result_t SCPI_SystemAttA(scpi_t *context);
+scpi_result_t SCPI_SystemAttAQ(scpi_t *context);
+scpi_result_t SCPI_SystemAttB(scpi_t *context);
+scpi_result_t SCPI_SystemAttBQ(scpi_t *context);
+
+/* COMMunicate:CAN */
+scpi_result_t SCPI_SystemCommCanSend(scpi_t *context);
+scpi_result_t SCPI_SystemCommCanScanQ(scpi_t *context);
+
+/* DETector node commands */
+scpi_result_t SCPI_SystemDetSnQ(scpi_t *context);
+scpi_result_t SCPI_SystemDetVersionQ(scpi_t *context);
+scpi_result_t SCPI_SystemDetReset(scpi_t *context);
+scpi_result_t SCPI_SystemDetLed(scpi_t *context);
+scpi_result_t SCPI_SystemDetAddress(scpi_t *context);
+scpi_result_t SCPI_SystemDetFlashInfoQ(scpi_t *context);
+scpi_result_t SCPI_SystemDetFlashDataQ(scpi_t *context);
+
+/* ERRor */
+scpi_result_t SCPI_SystemErrorNextQ(scpi_t *context);
+scpi_result_t SCPI_SystemErrorCountQ(scpi_t *context);
+
+/* ── SENSe subsystem ─────────────────────────────────────────────────────── */
+
+scpi_result_t SCPI_SenseDetControl(scpi_t *context);
+scpi_result_t SCPI_SenseDetStop(scpi_t *context);
+scpi_result_t SCPI_SenseDetTempQ(scpi_t *context);
+scpi_result_t SCPI_SenseDetPowerQ(scpi_t *context);
+scpi_result_t SCPI_SenseDetBand(scpi_t *context);
+
+/* ── SOURce subsystem ─────────────────────────────────────────────────────── */
+
+scpi_result_t SCPI_SourceDetFreq(scpi_t *context);
+scpi_result_t SCPI_SourceDetPower(scpi_t *context);
+
+/* ── ROUTe subsystem ──────────────────────────────────────────────────────── */
+
+/* ROUTe:DETector:SWITch */
+scpi_result_t SCPI_RouteDetSwitch(scpi_t *context);
+
+/* ROUTe:SWITch:<addr> (RFSW via Modbus) */
+scpi_result_t SCPI_RouteSwitchChannelQ(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchChannel(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchModeQ(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchMode(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchIdentityQ(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchOutputQ(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchOutput(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchInputQ(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchConditionQ(scpi_t *context);
+scpi_result_t SCPI_RouteSwitchAddress(scpi_t *context);
+
+/* ── STATus subsystem ─────────────────────────────────────────────────────── */
+
+scpi_result_t SCPI_StatusOperationEventQ(scpi_t *context);
+scpi_result_t SCPI_StatusQuestionableEventQ(scpi_t *context);
+
+/* ── DIAGnostic subsystem ─────────────────────────────────────────────────── */
+
+scpi_result_t SCPI_DiagDebug(scpi_t *context);
+scpi_result_t SCPI_DiagDebugQ(scpi_t *context);
+scpi_result_t SCPI_DiagEcho(scpi_t *context);
+scpi_result_t SCPI_DiagEchoQ(scpi_t *context);
 
 #ifdef __cplusplus
 }

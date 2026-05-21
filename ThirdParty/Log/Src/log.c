@@ -94,6 +94,7 @@ static char              g_dbg_buffer[LOG_DBG_BUF_SIZE]; /*!< Line buffer for in
 static volatile uint8_t  g_dbg_pos;                       /*!< Current write position        */
 static volatile uint8_t  g_dbg_cmd_pending;               /*!< Flag: complete line ready     */
 static uint8_t           g_dbg_echo = 0U;                 /*!< Echo mode (default: off)      */
+static uint8_t           g_dbg_enabled = 1U;              /*!< Debug CLI fallback (default: on) */
 
 /**
   * @brief DMA RX ring buffer — receives UART data via DMA in CIRCULAR mode
@@ -263,6 +264,26 @@ void Log_Print(uint8_t level, const char *fmt, ...)
 }
 
 /**
+  * @brief  Write raw data to UART without any prefix, timestamp, or formatting
+  * @param  data  Pointer to data to send
+  * @param  len   Number of bytes to send
+  * @note   Thread-safe — disables IRQ during UART transmit.
+  *         Used by SCPI_Write() for clean SCPI protocol responses.
+  */
+void Log_WriteRaw(const char *data, size_t len)
+{
+    if (g_log_config.huart == NULL || data == NULL || len == 0U)
+    {
+        return;
+    }
+
+    /* Temporarily disable interrupts to prevent concurrent UART access */
+    __disable_irq();
+    HAL_UART_Transmit(g_log_config.huart, (uint8_t *)data, (uint16_t)len, g_log_config.timeout);
+    __enable_irq();
+}
+
+/**
   * @brief  Flush log output — wait for UART TX to complete
   * @note   Currently a no-op since HAL_UART_Transmit is blocking.
   *         If later switched to DMA/IT mode, this will wait for completion.
@@ -411,6 +432,57 @@ void Log_DbgInject(const char *cmd)
     g_dbg_buffer[len] = '\0';
 
     _dbg_parse_and_execute(g_dbg_buffer);
+}
+
+/**
+  * @brief  Copy the pending debug line into a caller buffer without consuming it
+  * @param  buf     Output buffer
+  * @param  maxlen  Maximum bytes to copy (including null terminator)
+  * @retval Number of bytes copied (0 = no pending command)
+  */
+uint8_t Log_DbgPeekLine(char *buf, uint8_t maxlen)
+{
+    if (g_dbg_cmd_pending == 0U || buf == NULL || maxlen == 0U)
+    {
+        return 0U;
+    }
+
+    __disable_irq();
+    uint8_t len = g_dbg_pos;
+    if (len >= maxlen) len = maxlen - 1U;
+    memcpy(buf, g_dbg_buffer, len);
+    buf[len] = '\0';
+    __enable_irq();
+
+    return len;
+}
+
+/**
+  * @brief  Discard the pending debug line (clear the pending flag)
+  */
+void Log_DbgConsume(void)
+{
+    __disable_irq();
+    g_dbg_cmd_pending = 0U;
+    g_dbg_pos = 0U;
+    __enable_irq();
+}
+
+/**
+  * @brief  Enable or disable debug CLI fallback mode
+  */
+void Log_DbgSetEnabled(uint8_t enable)
+{
+    g_dbg_enabled = (enable != 0U) ? 1U : 0U;
+}
+
+/**
+  * @brief  Query whether debug CLI fallback is enabled
+  * @retval 1 if debug CLI is active, 0 if SCPI-only
+  */
+uint8_t Log_DbgIsEnabled(void)
+{
+    return g_dbg_enabled;
 }
 
 /* Private functions ---------------------------------------------------------*/

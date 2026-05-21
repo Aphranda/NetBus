@@ -174,6 +174,35 @@ void Log_DbgSetEcho(uint8_t enable);
 uint8_t Log_DbgAvailable(void);
 
 /**
+  * @brief  Copy the pending debug command line into a caller buffer without consuming it
+  * @param  buf     Output buffer
+  * @param  maxlen  Maximum bytes to copy (including null terminator)
+  * @retval Number of bytes copied (0 = no pending command)
+  */
+uint8_t Log_DbgPeekLine(char *buf, uint8_t maxlen);
+
+/**
+  * @brief  Discard the pending debug command line (clear the pending flag)
+  * @note   Use after a pre-filter has handled the command to prevent Log_DbgProcess()
+  *         from re-processing it.
+  */
+void Log_DbgConsume(void);
+
+/**
+  * @brief  Enable or disable debug CLI fallback mode
+  * @param  enable  1 = debug CLI active, 0 = SCPI-only mode
+  * @note   When debug CLI is disabled, unrecognized SCPI commands return an error
+  *         rather than attempting debug CLI interpretation.
+  */
+void Log_DbgSetEnabled(uint8_t enable);
+
+/**
+  * @brief  Query whether debug CLI fallback is enabled
+  * @retval 1 if debug CLI is active, 0 if SCPI-only
+  */
+uint8_t Log_DbgIsEnabled(void);
+
+/**
   * @brief  Manually inject a debug command string for processing
   * @param  cmd  Null-terminated command string (e.g. "att a 5")
   * @note   Useful for programmatic command injection or testing.
@@ -205,6 +234,15 @@ HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config);
   * @note   Called internally by LOG_* macros; can be called directly.
   */
 void Log_Print(uint8_t level, const char *fmt, ...);
+
+/**
+  * @brief  Write raw data to UART without any prefix, timestamp, or formatting
+  * @param  data  Pointer to data to send
+  * @param  len   Number of bytes to send
+  * @note   Used by SCPI_Write() to output clean SCPI responses.
+  *         Thread-safe — disables IRQ during UART transmit.
+  */
+void Log_WriteRaw(const char *data, size_t len);
 
 /**
   * @brief  Flush pending log data (waits for UART TX to complete)

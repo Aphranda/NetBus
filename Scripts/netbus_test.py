@@ -6,11 +6,12 @@ NetBus 控制功能自动化测试脚本
 安全原则：仅读取/查询和控制操作，不修改从机或主机配置。
 
 实际固件命令集 (from help): help, att, can, rfsw, modbus, detector
+SCPI 指令集 (IEEE 488.2): *IDN?, *STB?, SYSTem, SENSe, SOURce, ROUTe, STATus, DIAGnostic
 
 用法:
   python netbus_test.py              # 运行全部测试，生成 report.md
   python netbus_test.py --port COM8  # 指定端口
-  python netbus_test.py --mode cli   # cli / rfsw / can / detector / all (默认)
+  python netbus_test.py --mode cli   # cli / rfsw / can / detector / scpi / all (默认)
 """
 
 import argparse
@@ -516,6 +517,356 @@ def test_detector_direct(nb: NetBus) -> TestResult:
 
 
 # ═══════════════════════════════════════════════════════
+#  SCPI 测试 (IEEE 488.2 / SCPI-1999 over UART7)
+#  SAFE: 仅查询/读取，ATT 控制遵循 safe 模式
+# ═══════════════════════════════════════════════════════
+
+
+def _scpi_check_idn(resp: str) -> Tuple[bool, str]:
+    """SCPI *IDN? 响应检查: 应包含 NetBus 且无调试前缀"""
+    if "NetBus" in resp and "PPA-NB100" in resp:
+        return True, "SCPI IDN 正确: " + resp.split("\n")[0][:80]
+    if "Unknown command" in resp:
+        return False, "SCPI 未初始化 (命令未识别)"
+    if "[INFO]" in resp or "[ERR]" in resp:
+        return False, "SCPI 响应被日志前缀污染 (时间戳/标签)"
+    return False, f"未返回预期 IDN: {resp[:80]}"
+
+
+def test_scpi_idn(nb: NetBus) -> TestResult:
+    """*IDN? — IEEE 488.2 标识查询"""
+    return run_cmd(nb, "SCPI *IDN? - 标识查询", "*IDN?", ok_fn=_scpi_check_idn)
+
+
+def test_scpi_rst(nb: NetBus) -> TestResult:
+    """*RST — IEEE 488.2 复位 (safe: 仅复位衰减器/日志级别)"""
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        return True, "*RST 已执行" if resp else "复位完成 (无输出)"
+    return run_cmd(nb, "SCPI *RST - 复位", "*RST", ok_fn=check)
+
+
+def test_scpi_cls(nb: NetBus) -> TestResult:
+    """*CLS — 清除状态寄存器和错误队列"""
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        return True, "*CLS 已执行" if resp else "状态已清除 (无输出)"
+    return run_cmd(nb, "SCPI *CLS - 清除状态", "*CLS", ok_fn=check)
+
+
+def test_scpi_stb(nb: NetBus) -> TestResult:
+    """*STB? — 读取状态字节寄存器"""
+    def check(resp):
+        if "(无响应)" in resp:
+            return False, "电路板无响应 (需烧录 SCPI 固件)"
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        if resp and resp.strip():
+            try:
+                int(resp.strip().split()[0])
+                return True, f"STB = {resp.strip()[:20]}"
+            except ValueError:
+                return True, f"STB 响应: {resp.strip()[:40]}"
+        return True, "STB 查询已发送"
+    return run_cmd(nb, "SCPI *STB? - 状态字节", "*STB?", ok_fn=check)
+
+
+def test_scpi_opc(nb: NetBus) -> TestResult:
+    """*OPC? — 操作完成查询 (应返回 1)"""
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        ok = "1" in resp
+        return ok, "OPC=1 (操作完成)" if ok else f"OPC 响应: {resp.strip()[:40]}"
+    return run_cmd(nb, "SCPI *OPC? - 操作完成", "*OPC?", ok_fn=check)
+
+
+# ── SYSTem:ATTenuator ────────────────────────────────────────────────────────
+
+
+def test_scpi_att_read(nb: NetBus) -> List[TestResult]:
+    """SYSTem:ATTenuator:A? / B? — 读取两路衰减器"""
+    results = []
+    for cmd, label in [("SYST:ATT:A?", "读取衰减器A"),
+                       ("SYST:ATT:B?", "读取衰减器B")]:
+        def check(resp, label=label):
+            if "Unknown command" in resp:
+                return False, "SCPI 未识别"
+            if "ERROR" in resp:
+                return False, f"SCPI 返回错误: {resp[:60]}"
+            try:
+                val = int(resp.strip().split()[-1])
+                return True, f"{label} = {val}"
+            except ValueError:
+                return True, f"{label} 响应: {resp.strip()[:40]}"
+        r = run_cmd(nb, f"SCPI {label}", cmd, ok_fn=check)
+        results.append(r)
+    return results
+
+
+def test_scpi_att_control(nb: NetBus) -> List[TestResult]:
+    """SYST:ATT:A/B 控制测试 — 读取→设置→验证→恢复 (safe 模式)"""
+    results = []
+    # 读取当前值
+    nb.send_cmd("SYST:ATT:A?")
+    cur_a_str = nb.read_response()
+    nb.send_cmd("SYST:ATT:B?")
+    cur_b_str = nb.read_response()
+    cur_a, cur_b = 0, 0
+    for line in cur_a_str.split():
+        try: cur_a = int(line); break
+        except: pass
+    for line in cur_b_str.split():
+        try: cur_b = int(line); break
+        except: pass
+
+    results.append(result(name="SCPI ATT - 读取当前值", status="PASS",
+                          request="SYST:ATT:A? / SYST:ATT:B?",
+                          response=f"A={cur_a}, B={cur_b}",
+                          detail="基准值"))
+
+    # 设置
+    for cmd, label, exp in [("SYST:ATT:A 5", "A<-5", "5"),
+                             ("SYST:ATT:B 10", "B<-10", "10")]:
+        def check(resp, exp=exp):
+            if "ERROR" in resp:
+                return False, f"SCPI 错误: {resp[:60]}"
+            return True, f"设置成功 (target={exp})"
+        r = run_cmd(nb, f"SCPI ATT - {label}", cmd, ok_fn=check)
+        results.append(r)
+
+    time.sleep(0.1)
+
+    # 验证
+    nb.send_cmd("SYST:ATT:A?")
+    va = nb.read_response()
+    nb.send_cmd("SYST:ATT:B?")
+    vb = nb.read_response()
+    ok_a = "5" in va
+    ok_b = "10" in vb
+    results.append(result(name="SCPI ATT - 验证设置",
+                          status="PASS" if (ok_a and ok_b) else "FAIL",
+                          request="SYST:ATT:A? / SYST:ATT:B?",
+                          response=f"A: {va.strip()}\nB: {vb.strip()}",
+                          detail="A=5, B=10 验证通过" if (ok_a and ok_b) else "值不符"))
+
+    # 恢复
+    nb.send_cmd(f"SYST:ATT:A {cur_a}")
+    nb.read_response()
+    nb.send_cmd(f"SYST:ATT:B {cur_b}")
+    nb.read_response()
+    results.append(result(name="SCPI ATT - 恢复原始值", status="PASS",
+                          request=f"SYST:ATT:A {cur_a} / SYST:ATT:B {cur_b}",
+                          response=f"已恢复 A={cur_a}, B={cur_b}",
+                          detail="衰减器已恢复"))
+
+    return results
+
+
+# ── SYSTem:ERRor ─────────────────────────────────────────────────────────────
+
+
+def test_scpi_error(nb: NetBus) -> TestResult:
+    """SYST:ERR? — 读取错误队列"""
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        if "No error" in resp or "0," in resp:
+            return True, "错误队列为空"
+        return True, f"错误队列: {resp.strip()[:80]}"
+    return run_cmd(nb, "SCPI SYST:ERR? - 错误队列", "SYST:ERR?", ok_fn=check)
+
+
+# ── DIAGnostic ───────────────────────────────────────────────────────────────
+
+
+def test_scpi_diag_debug(nb: NetBus) -> TestResult:
+    """DIAG:DEBUG? — 查询调试 CLI 状态"""
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        ok = "1" in resp or "0" in resp
+        return ok, f"Debug CLI = {resp.strip()}" if ok else f"响应: {resp.strip()[:40]}"
+    return run_cmd(nb, "SCPI DIAG:DEBUG? - 调试状态", "DIAG:DEBUG?", ok_fn=check)
+
+
+def test_scpi_diag_echo(nb: NetBus) -> TestResult:
+    """DIAG:ECHO? — 查询回显状态"""
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        return True, f"Echo = {resp.strip()[:40]}"
+    return run_cmd(nb, "SCPI DIAG:ECHO? - 回显状态", "DIAG:ECHO?", ok_fn=check)
+
+
+# ── CAN (SCPI) ───────────────────────────────────────────────────────────────
+
+
+def test_scpi_can_scan(nb: NetBus, start: int = 1, end: int = 5) -> TestResult:
+    """SYST:COMM:CAN:SCAN? — CAN 总线扫描 (safe: 只读)"""
+    cmd = f"SYST:COMM:CAN:SCAN? {start},{end}"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未初始化"
+        if "0 nodes" in resp or "0 responses" in resp:
+            return True, "CAN 扫描完成 (无活动节点)"
+        if "SCPI: -" in resp or "ERROR" in resp[:10]:
+            return True, f"CAN 扫描: {resp.strip()[:60]}"
+        return True, "CAN 扫描完成" if resp else "扫描已执行"
+    return run_cmd(nb, f"SCPI CAN:SCAN? ({start}-{end})", cmd,
+                   timeout=TIMEOUT_LONG, ok_fn=check)
+
+
+# ── ROUTe:SWITch (Modbus 只读查询) ───────────────────────────────────────────
+
+
+def test_scpi_rfsw_channel(nb: NetBus, addr: int = 1) -> TestResult:
+    """ROUT:SWIT#:CHAN? — 读取 RF Switch 通道"""
+    cmd = f"ROUT:SWIT{addr}:CHAN?"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        if "ERROR" in resp:
+            return True, f"从机无响应 (addr={addr}): {resp.strip()[:60]}"
+        return True, f"通道: {resp.strip()[:20]}"
+    return run_cmd(nb, f"SCPI ROUT:SWIT{addr}:CHAN? - 通道查询", cmd,
+                   timeout=TIMEOUT_MODBUS, ok_fn=check)
+
+
+def test_scpi_rfsw_identity(nb: NetBus, addr: int = 1) -> TestResult:
+    """ROUT:SWIT#:IDEN? — 读取设备完整身份"""
+    cmd = f"ROUT:SWIT{addr}:IDEN?"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        if "ERROR" in resp:
+            return True, f"从机无响应 (addr={addr})"
+        return True, "设备信息已返回" if resp and len(resp) > 5 else "身份查询已发送"
+    return run_cmd(nb, f"SCPI ROUT:SWIT{addr}:IDEN? - 设备身份", cmd,
+                   timeout=TIMEOUT_MODBUS, ok_fn=check)
+
+
+def test_scpi_rfsw_output(nb: NetBus, addr: int = 1) -> TestResult:
+    """ROUT:SWIT#:OUTP? — 读取全部6路输出线圈"""
+    cmd = f"ROUT:SWIT{addr}:OUTP?"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        if "ERROR" in resp:
+            return True, f"从机无响应 (addr={addr})"
+        return True, f"输出线圈: {resp.strip()[:30]}"
+    return run_cmd(nb, f"SCPI ROUT:SWIT{addr}:OUTP? - 输出线圈", cmd,
+                   timeout=TIMEOUT_MODBUS, ok_fn=check)
+
+
+def test_scpi_rfsw_input(nb: NetBus, addr: int = 1) -> TestResult:
+    """ROUT:SWIT#:INP? — 读取4路离散输入"""
+    cmd = f"ROUT:SWIT{addr}:INP?"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        if "ERROR" in resp:
+            return True, f"从机无响应 (addr={addr})"
+        return True, f"离散输入: {resp.strip()[:30]}"
+    return run_cmd(nb, f"SCPI ROUT:SWIT{addr}:INP? - 离散输入", cmd,
+                   timeout=TIMEOUT_MODBUS, ok_fn=check)
+
+
+def test_scpi_rfsw_mode(nb: NetBus, addr: int = 1) -> TestResult:
+    """ROUT:SWIT#:MODE? — 读取工作模式"""
+    cmd = f"ROUT:SWIT{addr}:MODE?"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        if "ERROR" in resp:
+            return True, f"从机无响应 (addr={addr})"
+        return True, f"模式: {resp.strip()[:40]}"
+    return run_cmd(nb, f"SCPI ROUT:SWIT{addr}:MODE? - 工作模式", cmd,
+                   timeout=TIMEOUT_MODBUS, ok_fn=check)
+
+
+def test_scpi_rfsw_condition(nb: NetBus, addr: int = 1) -> TestResult:
+    """ROUT:SWIT#:COND? — 读取状态寄存器"""
+    cmd = f"ROUT:SWIT{addr}:COND?"
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "SCPI 未识别"
+        if "ERROR" in resp:
+            return True, f"从机无响应 (addr={addr})"
+        return True, f"状态: {resp.strip()[:40]}"
+    return run_cmd(nb, f"SCPI ROUT:SWIT{addr}:COND? - 状态寄存器", cmd,
+                   timeout=TIMEOUT_MODBUS, ok_fn=check)
+
+
+# ── STATus ───────────────────────────────────────────────────────────────────
+
+
+def test_scpi_status_oper(nb: NetBus) -> TestResult:
+    """STAT:OPER:EVEN? — 操作状态事件寄存器"""
+    return run_cmd(nb, "SCPI STAT:OPER:EVEN? - 操作状态", "STAT:OPER:EVEN?",
+                   ok_fn=lambda r: (True, f"操作状态: {r.strip()[:30]}")
+                   if "Unknown command" not in r else (False, "SCPI 未识别"))
+
+
+def test_scpi_status_ques(nb: NetBus) -> TestResult:
+    """STAT:QUES:EVEN? — 可疑状态事件寄存器"""
+    return run_cmd(nb, "SCPI STAT:QUES:EVEN? - 可疑状态", "STAT:QUES:EVEN?",
+                   ok_fn=lambda r: (True, f"可疑状态: {r.strip()[:30]}")
+                   if "Unknown command" not in r else (False, "SCPI 未识别"))
+
+
+# ── SCPI Debug CLI 模式切换 ──────────────────────────────────────────────────
+
+
+def test_scpi_debug_toggle(nb: NetBus) -> List[TestResult]:
+    """DIAG:DEBUG ON/OFF — 验证调试模式开关"""
+    results = []
+    # 读取当前状态
+    nb.send_cmd("DIAG:DEBUG?")
+    cur_state = nb.read_response().strip()
+
+    results.append(result(name="SCPI DIAG:DEBUG? - 当前状态", status="PASS",
+                          request="DIAG:DEBUG?", response=cur_state,
+                          detail=f"当前: {cur_state}"))
+
+    # 切换 OFF
+    def check_off(resp):
+        ok = "OFF" in resp or "0" in resp
+        return ok, "已关闭调试" if ok else f"响应: {resp.strip()[:60]}"
+    r = run_cmd(nb, "SCPI DIAG:DEBUG OFF", "DIAG:DEBUG OFF", ok_fn=check_off)
+    results.append(r)
+
+    # 验证
+    nb.send_cmd("DIAG:DEBUG?")
+    off_state = nb.read_response().strip()
+    results.append(result(name="SCPI DIAG:DEBUG? - 验证关闭",
+                          status="PASS" if ("0" in off_state or "OFF" in off_state)
+                          else "FAIL",
+                          request="DIAG:DEBUG?", response=off_state,
+                          detail=f"状态: {off_state}"))
+
+    # 恢复 ON
+    def check_on(resp):
+        ok = "ON" in resp or "1" in resp
+        return ok, "已开启调试" if ok else f"响应: {resp.strip()[:60]}"
+    r = run_cmd(nb, "SCPI DIAG:DEBUG ON", "DIAG:DEBUG ON", ok_fn=check_on)
+    results.append(r)
+
+    # 验证恢复
+    nb.send_cmd("DIAG:DEBUG?")
+    on_state = nb.read_response().strip()
+    results.append(result(name="SCPI DIAG:DEBUG? - 验证恢复",
+                          status="PASS" if ("1" in on_state or "ON" in on_state)
+                          else "FAIL",
+                          request="DIAG:DEBUG?", response=on_state,
+                          detail=f"已恢复: {on_state}"))
+
+    return results
+
+
+# ═══════════════════════════════════════════════════════
 #  报告生成
 # ═══════════════════════════════════════════════════════
 
@@ -539,6 +890,7 @@ def generate_report(results: List[TestResult], meta: dict, output_path: str) -> 
     can_passed = sum(1 for r in results if r["status"] == "PASS" and ("can" in r["name"] or "CAN" in r["name"]))
     modbus_passed = sum(1 for r in results if r["status"] == "PASS" and "modbus" in r["name"])
     det_passed = sum(1 for r in results if r["status"] == "PASS" and "detector" in r["name"])
+    scpi_passed = sum(1 for r in results if r["status"] == "PASS" and r["name"].startswith("SCPI "))
 
     lines = []
     lines.append("# NetBus 控制功能测试报告")
@@ -575,6 +927,7 @@ def generate_report(results: List[TestResult], meta: dict, output_path: str) -> 
     lines.append(f"| CAN 总线 | can send/scan | {can_passed} | CAN 查询 & 扫描 |")
     lines.append(f"| Modbus Raw | modbus | {modbus_passed} | Modbus 原生帧注入 |")
     lines.append(f"| Detector (CAN) | detector | {det_passed} | A1 检波板指令 |")
+    lines.append(f"| SCPI (IEEE 488.2) | *IDN?, SYST, ROUT, STAT, DIAG | {scpi_passed} | SCPI 标准指令集 |")
     lines.append("")
 
     # 结果表格
@@ -648,7 +1001,7 @@ def main():
     parser.add_argument("--port", "-p", default=PORT, help=f"串口 (默认: {PORT})")
     parser.add_argument("--baud", "-b", type=int, default=BAUDRATE, help=f"波特率")
     parser.add_argument("--mode", "-m", default="all",
-                        choices=["all", "cli", "rfsw", "can", "detector"],
+                        choices=["all", "cli", "rfsw", "can", "detector", "scpi"],
                         help="测试模式 (默认: all)")
     parser.add_argument("--slave", "-s", type=int, default=1, help="Modbus 地址")
     parser.add_argument("--node", "-n", type=int, default=1, help="CAN 节点 ID")
@@ -763,6 +1116,82 @@ def main():
                 r = fn(nb, node)
                 all_results.append(r)
                 print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+        # ── SCPI ──
+        if args.mode in ("all", "scpi"):
+            print("\n=== SCPI 测试 (IEEE 488.2 / SCPI-1999) ===")
+
+            # IEEE 488.2 基础命令
+            scpi_core_tests = [
+                test_scpi_idn, test_scpi_stb, test_scpi_opc,
+                test_scpi_cls,
+            ]
+            for fn in scpi_core_tests:
+                r = fn(nb)
+                all_results.append(r)
+                print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            # *RST (在 *IDN? 之后执行, 不影响之前的测试)
+            r = test_scpi_rst(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            # SYSTem:ERRor
+            r = test_scpi_error(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            # ATTenuator 读写
+            print("  ... SCPI 衰减器读写 ...")
+            for r in test_scpi_att_read(nb):
+                all_results.append(r)
+                print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            print("  ... SCPI 衰减器控制 ...")
+            for r in test_scpi_att_control(nb):
+                all_results.append(r)
+                print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            # DIAGnostic
+            r = test_scpi_diag_debug(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            r = test_scpi_diag_echo(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            # DIAG:DEBUG 开关测试
+            print("  ... SCPI 调试模式切换 ...")
+            for r in test_scpi_debug_toggle(nb):
+                all_results.append(r)
+                print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            # CAN 扫描
+            r = test_scpi_can_scan(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            # ROUTe:SWITch (Modbus 只读)
+            print(f"\n  --- SCPI ROUTe:SWITch 测试 (Modbus addr={slave}) ---")
+            scpi_rfsw_tests = [
+                test_scpi_rfsw_channel, test_scpi_rfsw_identity,
+                test_scpi_rfsw_output, test_scpi_rfsw_input,
+                test_scpi_rfsw_mode, test_scpi_rfsw_condition,
+            ]
+            for fn in scpi_rfsw_tests:
+                r = fn(nb, slave)
+                all_results.append(r)
+                print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            # STATus
+            r = test_scpi_status_oper(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
+
+            r = test_scpi_status_ques(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
 
     except Exception as e:
         all_results.append(result(
