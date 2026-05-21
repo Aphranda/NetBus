@@ -273,7 +273,7 @@ Log_DbgSetEcho(1);  // 开启串口回显（默认）
 main()
  ├─ MX_UART7_Init()            ← HAL 初始化 UART7
  ├─ App_RegisterModule(&g_log_task_module)     ← Log 模块注册（优先）
- ├─ App_RegisterModule(&g_rs485_task_module)   ← RS485 模块注册
+ ├─ App_RegisterModule(&g_rfsw_task_module)   ← RFSW 模块注册
  ├─ App_Task_Init()
  │   ├─ _log_task_init()
  │   │   └─ Log_Init()         ← 启动 Log 模块，注册内置命令
@@ -282,14 +282,14 @@ main()
  │   │           ├─ Log_RegisterDbgCmd("att",  ...)
  │   │           └─ HAL_UART_Receive_IT()  ← 启动 RX 中断
  │   │
- │   └─ _rs485_task_init()
+ │   └─ _rfsw_task_init()
  │       └─ RS485_Init()       ← 启动 RS485 (UART8 DMA CIRCULAR + IDLE)
  │           └─ Log_RegisterDbgCmd("modbus", _dbg_cmd_modbus)  ← 注册 modbus 命令
  │
  └─ App_Task_Loop()
      ├─ _log_task_process()
      │   └─ Log_DbgProcess()   ← 主循环中处理待解析命令
-     └─ _rs485_task_process()
+     └─ _rfsw_task_process()
          └─ 检查 RS485 接收数据 ← 非 Modbus 事务期间打印 RX 数据
 ```
 

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(conda env *)",
+      "Bash(D:/Microsoft/Miniconda/envs/ADS/python.exe -c \"import serial; print\\('ADS: pyserial', serial.__version__\\)\")",
+      "Bash(D:/Microsoft/Miniconda/envs/RNX/python.exe -c \"import serial; print\\('RNX: pyserial', serial.__version__\\)\")",
+      "Bash(D:/Microsoft/Miniconda/python.exe -c \"import serial; print\\('base: pyserial', serial.__version__\\)\")",
+      "Bash(D:/Microsoft/Miniconda/python.exe -m pip install pyserial)",
+      "Bash(D:/Microsoft/Miniconda/python.exe -c \"import serial.tools.list_ports; ports = list\\(serial.tools.list_ports.comports\\(\\)\\); print\\([p.device for p in ports]\\)\")",
+      "Bash(D:/Microsoft/Miniconda/python.exe Scripts/netbus_test.py)",
+      "Bash(D:/Microsoft/Miniconda/python.exe Scripts/netbus_test.py --mode all --port COM8 --output Scripts/report_netbus.md --json Scripts/report_netbus.json)"
+    ]
+  }
+}

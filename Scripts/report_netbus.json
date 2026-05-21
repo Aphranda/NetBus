@@ -1,0 +1,228 @@
+{
+  "meta": {
+    "port": "COM8",
+    "baudrate": 115200,
+    "mode": "all",
+    "slave": 1,
+    "node": 1
+  },
+  "timestamp": "2026-05-21T09:46:35.092783",
+  "results": [
+    {
+      "name": "help - 帮助信息",
+      "status": "PASS",
+      "request": "help",
+      "response": "[1514323] [INFO] === Debug CLI Commands ===[1514324] [INFO]   help[1514325] [INFO]   cansn[1514327] [INFO]   cansend[1514328] [INFO]   canscan[1514329] [INFO]   att[1514330] [INFO]   rfsw[1514331] [INFO]   detector[1514332] [INFO] ==========================",
+      "duration_ms": 1174.5,
+      "error": "",
+      "detail": "命令列表已返回"
+    },
+    {
+      "name": "att (无参数)",
+      "status": "PASS",
+      "request": "att",
+      "response": "[1515485] [INFO] Usage:\n[1515486] [INFO]   att a <0-15>    Set Attenuator A\n[1515487] [INFO]   att b <0-15>    Set Attenuator B\n[1515488] [INFO]   att a get       Get Attenuator A\n[1515489] [INFO]   att b get       Get Attenuator B\n[1515490] [INFO]   att get/?       Get both",
+      "duration_ms": 230.0,
+      "error": "",
+      "detail": "衰减器用法说明"
+    },
+    {
+      "name": "att - 读取两路衰减器",
+      "status": "PASS",
+      "request": "att ?",
+      "response": "[1515697] [INFO] Attenuator A = 0  (0x0)\n[1515698] [INFO] Attenuator B = 0  (0x0)",
+      "duration_ms": 216.0,
+      "error": "",
+      "detail": "读取两路衰减器 OK"
+    },
+    {
+      "name": "att - 读取衰减器A",
+      "status": "PASS",
+      "request": "att a ?",
+      "response": "[1515908] [INFO] Attenuator A = 0  (0x0)",
+      "duration_ms": 219.6,
+      "error": "",
+      "detail": "读取衰减器A OK"
+    },
+    {
+      "name": "att - 读取衰减器B",
+      "status": "PASS",
+      "request": "att b ?",
+      "response": "[1516125] [INFO] Attenuator B = 0  (0x0)",
+      "duration_ms": 219.1,
+      "error": "",
+      "detail": "读取衰减器B OK"
+    },
+    {
+      "name": "att - 读取当前值",
+      "status": "PASS",
+      "request": "att a ? / att b ?",
+      "response": "A=0, B=0",
+      "duration_ms": 0,
+      "error": "",
+      "detail": "基准值"
+    },
+    {
+      "name": "att - A<-5",
+      "status": "PASS",
+      "request": "att a 5",
+      "response": "[1516775] [INFO] Attenuator A set to 5",
+      "duration_ms": 215.3,
+      "error": "",
+      "detail": "设置成功"
+    },
+    {
+      "name": "att - B<-10",
+      "status": "PASS",
+      "request": "att b 10",
+      "response": "[1516988] [INFO] Attenuator B set to 10",
+      "duration_ms": 219.6,
+      "error": "",
+      "detail": "设置成功"
+    },
+    {
+      "name": "att - 验证设置",
+      "status": "PASS",
+      "request": "att a ? / att b ?",
+      "response": "A: [1517305] [INFO] Attenuator A = 5  (0x5)\nB: [1517514] [INFO] Attenuator B = 10  (0xA)",
+      "duration_ms": 0,
+      "error": "",
+      "detail": "A=5, B=10 验证通过"
+    },
+    {
+      "name": "att - 恢复原始值",
+      "status": "PASS",
+      "request": "att a 0 / att b 0",
+      "response": "已恢复 A=0, B=0",
+      "duration_ms": 0,
+      "error": "",
+      "detail": "衰减器已恢复"
+    },
+    {
+      "name": "rfsw - 帮助",
+      "status": "PASS",
+      "request": "rfsw",
+      "response": "[1518159] [INFO] RF Switch Control Commands (SP10T via Modbus RTU):\n[1518160] [INFO]   rfsw get <addr>              ��� Read current channel\n[1518161] [INFO]   rfsw set <addr> <ch>         ��� Set channel (1-10)\n[1518162] [INFO]   rfsw mode <addr> [io|cmd]    ��� Get/set work mode\n[1518163] [INFO]   rfsw info <addr>             ��� Read device identity & status\n[1518164] [INFO]   rfsw output <addr> <id> <0|1>��� Set single output coil\n[1518166] [INFO]   rfsw outputs <addr>          ��� Read all 6 output coils\n[1518167] [INFO]   rfsw inputs <addr>           ��� Read 4 discrete inputs\n[1518168] [INFO]   rfsw status <addr>           ��� Read device status register\n[1518169] [INFO]   rfsw id <addr> <new_id>      ��� Change device Modbus address\n[1518170] [INFO]   rfsw raw <addr> <hex...>     ��� Send raw Modbus frame\n[1518171] [INFO] Examples:\n[1518172] [INFO]   rfsw get 1         ��� read channel from device 1\n[1518173] [INFO]   rfsw set 1 5       ��� set device 1 to channel 5\n[1518174] [INFO]   rfsw mode 1 cmd    ��� set device 1 to COMMAND mode\n[1518175] [INFO]   rfsw info 1        ��� dump all device info",
+      "duration_ms": 330.5,
+      "error": "",
+      "detail": "rfsw 命令帮助"
+    },
+    {
+      "name": "rfsw get 1 - 读取通道号",
+      "status": "PASS",
+      "request": "rfsw get 1",
+      "response": "[1518419] [INFO] RFSW[1]: channel = 1",
+      "duration_ms": 221.3,
+      "error": "",
+      "detail": "通道号读取成功"
+    },
+    {
+      "name": "rfsw info 1 - 设备信息",
+      "status": "PASS",
+      "request": "rfsw info 1",
+      "response": "[1518651] [INFO] ������ RFSW[1] Device Info ������������������������������������������������������������������\n[1518652] [INFO]   Name:        'PPA-SP10'\n[1518653] [INFO]   Serial:      0\n[1518654] [INFO]   Modbus ID:   1\n[1518655] [INFO]   FW Version:  v0.0\n[1518656] [INFO]   HW Version:  16 (0x0010)\n[1518657] [INFO]   Status:      0x5400 (init_done=0, comm=0)\n[1518658] [INFO]   Output Ctrl: 0x0000\n[1518659] [INFO] ������������������������������������������������������������������������������������������������������������������������������������������\n[1518672] [INFO]   Channel:     1\n[1518684] [INFO]   Mode:        IO DIRECT (0)",
+      "duration_ms": 250.8,
+      "error": "",
+      "detail": "设备信息读取成功"
+    },
+    {
+      "name": "rfsw status 1 - 设备状态",
+      "status": "PASS",
+      "request": "rfsw status 1",
+      "response": "[1518845] [INFO] RFSW[1]: status = 0x5400\n[1518846] [INFO]   Init done:  NO\n[1518847] [INFO]   Comm active: NO",
+      "duration_ms": 217.8,
+      "error": "",
+      "detail": "读取完成"
+    },
+    {
+      "name": "rfsw outputs 1 - 读取输出线圈",
+      "status": "PASS",
+      "request": "rfsw outputs 1",
+      "response": "[1519056] [INFO] RFSW[1] output coils:\n[1519057] [INFO]   [0] S0_CA = OFF\n[1519058] [INFO]   [1] S0_CB = ON\n[1519059] [INFO]   [2] S1_CA = ON\n[1519060] [INFO]   [3] S1_CB = ON\n[1519061] [INFO]   [4] S2_CA = OFF\n[1519062] [INFO]   [5] S2_CB = OFF",
+      "duration_ms": 226.5,
+      "error": "",
+      "detail": "读取完成"
+    },
+    {
+      "name": "rfsw inputs 1 - 读取离散输入",
+      "status": "PASS",
+      "request": "rfsw inputs 1",
+      "response": "[1519269] [INFO] RFSW[1] discrete inputs:\n[1519270] [INFO]   CTRL1 = LOW\n[1519271] [INFO]   CTRL2 = LOW\n[1519272] [INFO]   CTRL3 = LOW\n[1519273] [INFO]   CTRL4 = LOW",
+      "duration_ms": 217.6,
+      "error": "",
+      "detail": "读取完成"
+    },
+    {
+      "name": "rfsw mode 1 - 读取工作模式",
+      "status": "PASS",
+      "request": "rfsw mode 1",
+      "response": "[1519477] [INFO] RFSW[1]: mode = IO DIRECT (0)",
+      "duration_ms": 213.7,
+      "error": "",
+      "detail": "模式读取成功"
+    },
+    {
+      "name": "canscan - CAN 总线扫描",
+      "status": "PASS",
+      "request": "canscan",
+      "response": "[1519676] [INFO] CAN Scan: scanning nodes 1-40 (40 nodes) ...\n[1519677] [INFO] CAN Scan: sending queries (ID=0x101, DLC=1) for nodes 1-40 ...\n[1519678] [INFO] CAN Scan TX (1 bytes): 01\n[1519679] [INFO] CAN Scan TX (1 bytes): 02\n[1519680] [INFO] CAN Scan TX (1 bytes): 03\n[1519681] [INFO] CAN Scan TX (1 bytes): 04\n[1519682] [INFO] CAN Scan TX (1 bytes): 05\n[1519683] [INFO] CAN Scan TX (1 bytes): 06\n[1519684] [INFO] CAN Scan TX (1 bytes): 07\n[1519685] [INFO] CAN Scan TX (1 bytes): 08\n[1519686] [INFO] CAN Scan TX (1 bytes): 09\n[1519688] [INFO] CAN Scan TX (1 bytes): 0A\n[1519691] [INFO] CAN Scan TX (1 bytes): 0B\n[1519692] [INFO] CAN Scan TX (1 bytes): 0C\n[1519693] [INFO] CAN Scan TX (1 bytes): 0D\n[1519694] [INFO] CAN Scan TX (1 bytes): 0E\n[1519695] [INFO] CAN Scan TX (1 bytes): 0F\n[1519696] [INFO] CAN Scan TX (1 bytes): 10\n[1519697] [INFO] CAN Scan TX (1 bytes): 11\n[1519698] [INFO] CAN Scan TX (1 bytes): 12\n[1519699] [INFO] CAN Scan TX (1 bytes): 13\n[1519700] [INFO] CAN Scan TX (1 bytes): 14\n[1519703] [INFO] CAN Scan TX (1 bytes): 15\n[1519704] [INFO] CAN Scan TX (1 bytes): 16\n[1519705] [INFO] CAN Scan TX (1 bytes): 17\n[1519706] [INFO] CAN Scan TX (1 bytes): 18\n[1519707] [INFO] CAN Scan TX (1 bytes): 19\n[1519708] [INFO] CAN Scan TX (1 bytes): 1A\n[1519709] [INFO] CAN Scan TX (1 bytes): 1B\n[1519710] [INFO] CAN Scan TX (1 bytes): 1C\n[1519711] [INFO] CAN Scan TX (1 bytes): 1D\n[1519712] [INFO] CAN Scan TX (1 bytes): 1E\n[1519715] [INFO] CAN Scan TX (1 bytes): 1F\n[1519716] [INFO] CAN Scan TX (1 bytes): 20\n[1519717] [INFO] CAN Scan TX (1 bytes): 21\n[1519718] [INFO] CAN Scan TX (1 bytes): 22\n[1519719] [INFO] CAN Scan TX23\n[1519720] [INFO] C (1 bytes): 24\n[1519721] Scan TX (1 \r19722] [INFO] CAN Scan TX (1 b\n9723] [INFO] CAN Sces): 27\n[1CAN Scan TX (1 byte[1519727] [can: sent 40 queries in[151728] [INFO] CAN Scan:  for responses)..[1519729] [INFO]   NOUND, SN='PINPR0000' (len=18)",
+      "duration_ms": 325.4,
+      "error": "",
+      "detail": "扫描完成"
+    },
+    {
+      "name": "cansn 1 - 检波板 SN 查询",
+      "status": "PASS",
+      "request": "cansn 1",
+      "response": "[1520228] [INFO] CAN Scan: scan complete, 1 node(s) found\n[1520229] [INFO] CAN eryinrom node 1 ...\n[1520230] [INSN: sending ID=0x101, DLC=1\n[1520231NX (1 bytes): 01\n[15 [INFO] CAN SN: SUCCESS - node 1 SN = 'PINPRFB00300000038' (len=18)\n[1520234] [INFOSN = 50 49 4E 50 52 46 42 30 30 33 30 30 30 30 30 30 33 38",
+      "duration_ms": 463.2,
+      "error": "",
+      "detail": "SN 查询成功"
+    },
+    {
+      "name": "detector help - 检波器帮助",
+      "status": "PASS",
+      "request": "detector help",
+      "response": "[1520304] [INFO] Available sub-commands:\n[1520305] [INFO]   sn, version, reset, led, nodeid, control, stop, switch\n[1520306] [INFO]   att, freq, band, temp, power, txpower, flash, readflash\n[1520307] [INFO]   cal, ota, writesn\n[1520308] [INFO]   Use 'detector' without args for full listing",
+      "duration_ms": 219.4,
+      "error": "",
+      "detail": "detector 子命令列表"
+    },
+    {
+      "name": "detector sn 1 - 检波板 SN",
+      "status": "PASS",
+      "request": "detector sn 1",
+      "response": "[1520508] [INFO] Node 1 SN: 'PINPRFB00300000038' (len=18)",
+      "duration_ms": 218.4,
+      "error": "",
+      "detail": "SN 查询成功"
+    },
+    {
+      "name": "detector version 1 - 固件版本",
+      "status": "PASS",
+      "request": "detector version 1",
+      "response": "[1520723] [INFO] Node 1 version: 3.1.21",
+      "duration_ms": 217.5,
+      "error": "",
+      "detail": "版本查询已发送"
+    },
+    {
+      "name": "detector temp 1 - 温度",
+      "status": "PASS",
+      "request": "detector temp 1 1 1",
+      "response": "[1520938] [INFO] Node 1 temp: det=-25592, mcu=-23799, rsv=0",
+      "duration_ms": 219.3,
+      "error": "",
+      "detail": "温度查询已发送"
+    },
+    {
+      "name": "detector flash 1 - Flash 信息",
+      "status": "PASS",
+      "request": "detector flash 1",
+      "response": "[1521154] [INFO] Node 1 Flash Info:\n[1521155] [INFO]   JEDEC ID: 0x1540EF, Status: 0x00\n[1521156] [INFO]   OTA image:   0x000000 (36 KB)\n[1521157] [INFO]   H coarse:    0x009001 (8 KB)\n[1521158] [INFO]   H fine:      0x00D007 (8 KB)\n[1521159] [INFO]   V coarse:    0x00F00A (8 KB)\n[1521160] [INFO]   V fine:      0x00B004 (8 KB)\n[1521161] [INFO]   Ext cal:     0x00100E (52 KB)\n[1521162] [INFO]   Reserved:    0x00E015 (8 KB)",
+      "duration_ms": 234.2,
+      "error": "",
+      "detail": "Flash 信息查询已发送"
+    }
+  ]
+}

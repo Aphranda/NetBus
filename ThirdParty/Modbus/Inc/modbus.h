@@ -167,7 +167,7 @@ uint32_t Modbus_GetTimeout(void);
   * @brief  Check if a Modbus transaction is currently pending
   * @retval 1 if a transaction is in progress, 0 otherwise
   * @note   Useful for cooperative multitasking — other tasks (e.g.
-  *         rs485_task process function) should not consume RS485 RX
+  *         rfsw_task process function) should not consume RS485 RX
   *         data while a transaction is pending.
   */
 uint8_t Modbus_IsTransactionPending(void);
