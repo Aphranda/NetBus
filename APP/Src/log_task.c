@@ -73,24 +73,12 @@ static App_Status_t _log_task_process(void);
 static void _log_task_on_error(App_Status_t err);
 
 /**
-  * @brief  Debug CLI handler for "cansn" — query CAN device SN via 0x101
+  * @brief  Debug CLI handler for "can" — CAN bus control
   * @param  argc  Argument count
-  * @param  argv  Argument vector (argv[0]="cansn", argv[1]=node_id)
+  * @param  argv  Argument vector (argv[0]="can", argv[1]=subcommand)
   */
-static void _dbg_cmd_cansn(int argc, char **argv);
-
-/**
-  * @brief  Debug CLI handler for "cansend" — send raw CAN frame
-  * @param  argc  Argument count
-  * @param  argv  Argument vector
-  */
+static void _dbg_cmd_can(int argc, char **argv);
 static void _dbg_cmd_cansend(int argc, char **argv);
-
-/**
-  * @brief  Debug CLI handler for "canscan" — scan CAN bus for active nodes
-  * @param  argc  Argument count
-  * @param  argv  Argument vector
-  */
 static void _dbg_cmd_canscan(int argc, char **argv);
 
 /**
@@ -188,30 +176,15 @@ static App_Status_t _log_task_init(void)
     }
     LOG_INFO("Log_Task: CAN initialized (FDCAN1, CAN FD with BRS)");
 
-    /* ── Register "cansn" debug CLI command ───────────────────────────── */
-    if (Log_RegisterDbgCmd("cansn", _dbg_cmd_cansn) != HAL_OK)
+    /* ── Register "can" debug CLI command ─────────────────────────────── */
+    if (Log_RegisterDbgCmdEx("can", _dbg_cmd_can, "CAN bus control (send/scan)") != HAL_OK)
     {
-        LOG_ERROR("Log_Task: failed to register 'cansn' debug command");
+        LOG_ERROR("Log_Task: failed to register 'can' debug command");
         return APP_ERROR;
     }
 
-    /* ── Register "cansend" debug CLI command ─────────────────────────── */
-    if (Log_RegisterDbgCmd("cansend", _dbg_cmd_cansend) != HAL_OK)
-    {
-        LOG_ERROR("Log_Task: failed to register 'cansend' debug command");
-        return APP_ERROR;
-    }
-
-    /* ── Register "canscan" debug CLI command ─────────────────────────── */
-    if (Log_RegisterDbgCmd("canscan", _dbg_cmd_canscan) != HAL_OK)
-    {
-        LOG_ERROR("Log_Task: failed to register 'canscan' debug command");
-        return APP_ERROR;
-    }
-
-    LOG_INFO("Log_Task: type 'cansn <node_id>' to query CAN device SN");
-    LOG_INFO("Log_Task: type 'cansend <id> <hex...>' to send raw CAN frame");
-    LOG_INFO("Log_Task: type 'canscan [start] [end]' to scan for CAN nodes");
+    LOG_INFO("Log_Task: type 'can send <id> <hex...>' to send raw CAN frame");
+    LOG_INFO("Log_Task: type 'can scan [start] [end]' to scan CAN bus");
 
     return APP_OK;
 }
@@ -243,163 +216,56 @@ static void _log_task_on_error(App_Status_t err)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "cansn" command                                                 */
+/*  Debug CLI — "can" command (CAN bus control dispatcher)                    */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'cansn' debug CLI command — query CAN device SN via 0x101
+  * @brief  'can' debug CLI command — CAN bus control
   *
   *         Usage:
-  *           cansn <node_id>
-  *             - Send CAN ID 0x101 with Byte0 = node_id to query SN
-  *             - Wait for response and print the SN string
-  *             - Example: "cansn 1"
-  *
-  *         Protocol (from Doc/V3.x A1检波板指令.docx):
-  *           0x101 读取 SN:
-  *             请求帧 ID=0x101, Data[0]=Node ID
-  *             响应帧 ID=NodeID, Byte0=0x01, Byte1=0x00(成功),
-  *             Byte2=SN长度, Byte3+=SN字符串内容(不带\0)
+  *           can              — show help
+  *           can send <id> <hex bytes...>  — send raw CAN frame
+  *           can scan [start] [end]        — scan bus for active nodes
   */
-static void _dbg_cmd_cansn(int argc, char **argv)
+static void _dbg_cmd_can(int argc, char **argv)
 {
-    uint32_t tick_start;
-    CAN_Msg_t tx_msg;
-    CAN_Msg_t rx_msg;
-
     if (argc < 2)
     {
-        LOG_INFO("Usage: cansn <node_id>");
-        LOG_INFO("  Query CAN device SN via CAN ID 0x101");
-        LOG_INFO("  Example: cansn 1");
+        LOG_INFO("=== CAN Commands ===");
+        LOG_INFO("  can send <id> <hex...>    — send raw CAN frame");
+        LOG_INFO("  can scan [start] [end]    — scan CAN bus");
         return;
     }
 
-    /* ── Parse Node ID ──────────────────────────────────────────────────── */
-    char *endptr = NULL;
-    long node_id = strtol(argv[1], &endptr, 0);
-
-    if (endptr == argv[1] || *endptr != '\0')
+    if (strcmp(argv[1], "send") == 0)
     {
-        LOG_INFO("Error: invalid node ID '%s' (must be numeric)", argv[1]);
-        return;
+        _dbg_cmd_cansend(argc - 1, &argv[1]);
     }
-
-    if (node_id < 0 || node_id > 0xFF)
+    else if (strcmp(argv[1], "scan") == 0)
     {
-        LOG_INFO("Error: node ID out of range (0-255): %ld", node_id);
-        return;
+        _dbg_cmd_canscan(argc - 1, &argv[1]);
     }
-
-    LOG_INFO("CAN SN: querying SN from node %ld ...", node_id);
-
-    /* ── Build and send the 0x101 SN query frame ───────────────────────── */
-    tx_msg.id   = 0x101U;
-    tx_msg.dlc  = 1U;  /* Only Byte0: Node ID */
-    tx_msg.data[0] = (uint8_t)(node_id & 0xFFU);
-
-    /* Print the outgoing CAN frame before sending */
-    LOG_INFO("CAN SN: sending ID=0x%03lX, DLC=%u",
-             (unsigned long)tx_msg.id, (unsigned)tx_msg.dlc);
-    _can_print_hex("CAN SN TX", tx_msg.data, tx_msg.dlc);
-
-    if (CAN_Send(&tx_msg) != HAL_OK)
+    else
     {
-        LOG_ERROR("CAN SN: CAN_Send() failed");
-        return;
+        LOG_INFO("Unknown sub-command: '%s'. Type 'can' for usage.", argv[1]);
     }
-
-    /* ── Poll for response with timeout ─────────────────────────────────── */
-    tick_start = HAL_GetTick();
-
-    while ((HAL_GetTick() - tick_start) < CANSN_TIMEOUT_MS)
-    {
-        if (CAN_GetRxMessage(&rx_msg) == HAL_OK)
-        {
-            /* Check if this is a response to our SN query:
-             *   - Response CAN ID should match the target node ID
-             *   - Byte0 should be 0x01 (command echo low byte of 0x101)
-             *   - Byte1 should be 0x00 (success) */
-            if (rx_msg.id == (uint32_t)node_id &&
-                rx_msg.dlc >= 3U &&
-                rx_msg.data[0] == 0x01U)
-            {
-                if (rx_msg.data[1] == 0x00U)
-                {
-                    /* Success — extract SN string */
-                    uint8_t sn_len = rx_msg.data[2];
-                    if (sn_len > CANSN_MAX_SN_LEN)
-                    {
-                        sn_len = CANSN_MAX_SN_LEN;
-                    }
-
-                    /* Build null-terminated SN string for safe printing */
-                    char sn_str[CANSN_MAX_SN_LEN + 1U];
-                    for (uint8_t i = 0U; i < sn_len; i++)
-                    {
-                        sn_str[i] = (char)rx_msg.data[3U + i];
-                    }
-                    sn_str[sn_len] = '\0';
-
-                    LOG_INFO("CAN SN: SUCCESS - node %ld SN = '%s' (len=%u)",
-                             node_id, sn_str, (unsigned)sn_len);
-
-                    /* Also print hex dump for debugging */
-                    {
-                        char hex_buf[256U];
-                        int pos = 0;
-                        for (uint8_t i = 0U; i < sn_len; i++)
-                        {
-                            pos += snprintf(&hex_buf[pos],
-                                            (size_t)(sizeof(hex_buf) - (size_t)pos - 1U),
-                                            "%02X ", (unsigned)(uint8_t)sn_str[i]);
-                            if (pos >= (int)(sizeof(hex_buf) - 4))
-                            {
-                                break;
-                            }
-                        }
-                        if (pos > 0)
-                        {
-                            hex_buf[pos - 1] = '\0';
-                        }
-                        LOG_INFO("CAN SN: SN hex = %s", hex_buf);
-                    }
-                }
-                else
-                {
-                    LOG_ERROR("CAN SN: node %ld returned error (result=0x%02X)",
-                              node_id, (unsigned)rx_msg.data[1]);
-                }
-                return;
-            }
-            else
-            {
-                /* Not our response — ignore and keep polling */
-                LOG_VERBOSE("CAN SN: ignoring unrelated msg id=0x%03X", rx_msg.id);
-            }
-        }
-    }
-
-    /* ── Timeout ────────────────────────────────────────────────────────── */
-    LOG_ERROR("CAN SN: TIMEOUT - no response from node %ld within %u ms",
-              node_id, (unsigned)CANSN_TIMEOUT_MS);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "cansend" command                                               */
+/*  Debug CLI — "can send" command                                             */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'cansend' debug CLI command — send raw CAN/CAN FD frame
+  * @brief  'can send' debug CLI command — send raw CAN/CAN FD frame
   *
   *         Usage:
-  *           cansend <id> <hex bytes...>
+  *           can send <id> <hex bytes...>
   *             - Send a raw CAN frame with specified ID and data bytes
   *             - ID: CAN identifier (decimal or 0x hex), 0x000-0x7FF
   *             - hex bytes: space-separated hex byte values (1-64 bytes)
   *             - Frames with >8 bytes are automatically sent as CAN FD
-  *             - Example: cansend 0x101 01          (SN query to node 1)
-  *             - Example: cansend 0x101 01 02 03    (3-byte data frame)
+  *             - Example: can send 0x101 01          (SN query to node 1)
+  *             - Example: can send 0x101 01 02 03    (3-byte data frame)
   */
 static void _dbg_cmd_cansend(int argc, char **argv)
 {
@@ -409,12 +275,12 @@ static void _dbg_cmd_cansend(int argc, char **argv)
 
     if (argc < 3)
     {
-        LOG_INFO("Usage: cansend <id> <hex bytes...>");
+        LOG_INFO("Usage: can send <id> <hex bytes...>");
         LOG_INFO("  Send a raw CAN frame with specified ID and data");
         LOG_INFO("  Examples:");
-        LOG_INFO("    cansend 0x101 01           -- SN query to node 1");
-        LOG_INFO("    cansend 0x101 01 02 03     -- 3-byte frame");
-        LOG_INFO("    cansend 0x105 01 01 0xE8   -- LED blink 1000ms");
+        LOG_INFO("    can send 0x101 01           -- SN query to node 1");
+        LOG_INFO("    can send 0x101 01 02 03     -- 3-byte frame");
+        LOG_INFO("    can send 0x105 01 01 0xE8   -- LED blink 1000ms");
         return;
     }
 
@@ -501,19 +367,19 @@ static void _dbg_cmd_cansend(int argc, char **argv)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "canscan" command                                               */
+/*  Debug CLI — "can scan" command                                             */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'canscan' debug CLI command — scan CAN bus for active nodes
+  * @brief  'can scan' debug CLI command — scan CAN bus for active nodes
   *
   *         Usage:
-  *           canscan [start_id] [end_id]
+  *           can scan [start_id] [end_id]
   *             - Scan CAN bus by sending 0x101 SN queries to a range of node IDs
   *             - Default range: 1-40 (per A1 protocol: Node ID limit)
   *             - Reports which nodes respond and their SN strings
-  *             - Example: canscan           (scan nodes 1-40)
-  *             - Example: canscan 1 10      (scan nodes 1-10)
+  *             - Example: can scan           (scan nodes 1-40)
+  *             - Example: can scan 1 10      (scan nodes 1-10)
   *
   *         Algorithm:
   *           1. Rapidly send 0x101 query for each node ID in range

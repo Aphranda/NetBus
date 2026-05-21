@@ -152,6 +152,16 @@ void Log_DbgProcess(void);
 HAL_StatusTypeDef Log_RegisterDbgCmd(const char *cmd, Log_DbgCmdFunc_t func);
 
 /**
+  * @brief  Register a custom debug command with help description
+  * @param  cmd   Command name string (e.g. "can")
+  * @param  func  Callback function to handle the command
+  * @param  help  One-line description shown by 'help' (NULL = no description)
+  * @retval HAL_OK on success
+  * @retval HAL_ERROR if command table is full
+  */
+HAL_StatusTypeDef Log_RegisterDbgCmdEx(const char *cmd, Log_DbgCmdFunc_t func, const char *help);
+
+/**
   * @brief  Enable or disable UART echo for debug terminal
   * @param  enable  1 = echo on (default), 0 = echo off
   */

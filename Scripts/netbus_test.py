@@ -5,7 +5,7 @@ NetBus 控制功能自动化测试脚本
 通过 COM8 (UART7 Debug CLI) 测试控制功能。
 安全原则：仅读取/查询和控制操作，不修改从机或主机配置。
 
-实际固件命令集 (from help): help, cansn, cansend, canscan, att, rfsw, detector
+实际固件命令集 (from help): help, att, can, rfsw, modbus, detector
 
 用法:
   python netbus_test.py              # 运行全部测试，生成 report.md
@@ -352,37 +352,54 @@ def test_rfsw_mode_read(nb: NetBus, addr: int = 1) -> TestResult:
 
 
 # ═══════════════════════════════════════════════════════
-#  CAN 测试 (cansn, canscan, cansend)
-#  SAFE: cansn, canscan — 只读/扫描
+#  Modbus 测试 (原生 Modbus RTU 帧注入)
+#  SAFE: 仅查询/读取操作
 # ═══════════════════════════════════════════════════════
 
 
-def test_canscan(nb: NetBus) -> TestResult:
-    """CAN 总线扫描"""
+def test_modbus_help(nb: NetBus) -> TestResult:
+    def check(resp):
+        ok = "Modbus" in resp or "modbus" in resp.lower()
+        return ok, "modbus 命令帮助" if ok else "modbus 命令无响应"
+    return run_cmd(nb, "modbus - 帮助", "modbus", ok_fn=check)
+
+
+def test_modbus_raw(nb: NetBus, addr: int = 1) -> TestResult:
+    """发送原生 Modbus 帧 (FC=03 读保持寄存器 0x0000)"""
+    frame = f"{addr:02X} 03 00 00 00 01"
     def check(resp):
         if "Unknown command" in resp:
-            return False, "canscan 命令未注册"
-        # canscan 扫描结果可以是找到节点或空
-        ok = "(无响应)" not in resp
-        return ok, "扫描完成" if ok else "无响应"
-    return run_cmd(nb, "canscan - CAN 总线扫描", "canscan",
+            return False, "modbus 命令未注册"
+        if "FAILED" in resp or "Timeout" in resp:
+            return True, f"从机无响应 (addr={addr})"
+        if "EXCEPTION" in resp:
+            return True, "Modbus 异常响应 (正常协议行为)"
+        return True, "Modbus 原生帧已发送"
+    return run_cmd(nb, f"modbus raw - FC=03 读寄存器 (addr={addr})",
+                   f"modbus {frame}", timeout=TIMEOUT_MODBUS, ok_fn=check)
+
+
+# ═══════════════════════════════════════════════════════
+#  CAN 测试 (can scan)
+#  SAFE: can scan — 只读扫描
+# ═══════════════════════════════════════════════════════
+
+
+def test_can_scan(nb: NetBus, start: int = 0, end: int = 0) -> TestResult:
+    """CAN 总线扫描 (分层命令: can scan)"""
+    if start > 0 and end > 0:
+        cmd = f"can scan {start} {end}"
+    else:
+        cmd = "can scan"
+
+    def check(resp):
+        if "Unknown command" in resp:
+            return False, "can 命令未注册"
+        if "(无响应)" in resp:
+            return False, "无响应"
+        return True, "扫描完成"
+    return run_cmd(nb, "can scan - CAN 总线扫描", cmd,
                    timeout=TIMEOUT_LONG, ok_fn=check)
-
-
-def test_cansn(nb: NetBus, node_id: int = 1) -> TestResult:
-    """查询检波板 SN (CAN 0x101)"""
-    def check(resp):
-        if "Unknown command" in resp:
-            return False, "cansn 命令未注册"
-        if "timeout" in resp.lower() or "no response" in resp.lower():
-            return True, "超时 (检波板未连接)"  # 正常协议行为
-        if "SN" in resp or "sn" in resp.lower():
-            return True, "SN 查询成功"
-        if "FAILED" in resp:
-            return True, "查询失败 (检波板未连接)"
-        return "(无响应)" not in resp, "SN 查询已发送"
-    return run_cmd(nb, f"cansn {node_id} - 检波板 SN 查询",
-                   f"cansn {node_id}", timeout=TIMEOUT_LONG, ok_fn=check)
 
 
 # ═══════════════════════════════════════════════════════
@@ -470,7 +487,8 @@ def generate_report(results: List[TestResult], meta: dict, output_path: str) -> 
     # 分类统计
     cli_passed = sum(1 for r in results if r["status"] == "PASS" and r["name"].startswith(("help", "att")))
     rfsw_passed = sum(1 for r in results if r["status"] == "PASS" and "rfsw" in r["name"])
-    can_passed = sum(1 for r in results if r["status"] == "PASS" and ("cansn" in r["name"] or "canscan" in r["name"]))
+    can_passed = sum(1 for r in results if r["status"] == "PASS" and ("can" in r["name"] or "CAN" in r["name"]))
+    modbus_passed = sum(1 for r in results if r["status"] == "PASS" and "modbus" in r["name"])
     det_passed = sum(1 for r in results if r["status"] == "PASS" and "detector" in r["name"])
 
     lines = []
@@ -505,7 +523,8 @@ def generate_report(results: List[TestResult], meta: dict, output_path: str) -> 
     lines.append("|--------|------|------|------|")
     lines.append(f"| CLI 基础 | help, att | {cli_passed} | 本地衰减器 & 帮助 |")
     lines.append(f"| RFSW (Modbus) | rfsw | {rfsw_passed} | RS485 远程 RF Switch |")
-    lines.append(f"| CAN 总线 | cansn, canscan | {can_passed} | CAN 扫描 & SN 查询 |")
+    lines.append(f"| CAN 总线 | can scan | {can_passed} | CAN 扫描 |")
+    lines.append(f"| Modbus Raw | modbus | {modbus_passed} | Modbus 原生帧注入 |")
     lines.append(f"| Detector (CAN) | detector | {det_passed} | A1 检波板指令 |")
     lines.append("")
 
@@ -651,14 +670,21 @@ def main():
                 all_results.append(r)
                 print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
 
-        # ── CAN ──
-        if args.mode in ("all", "can"):
-            print("\n=== CAN 总线测试 ===")
-            r = test_canscan(nb)
+        # ── Modbus ──
+        if args.mode in ("all", "rfsw"):
+            print("\n=== Modbus 原生帧注入 ===")
+            r = test_modbus_help(nb)
+            all_results.append(r)
+            print(f"  {r['status']:4s} {r['name']}")
+
+            r = test_modbus_raw(nb, slave)
             all_results.append(r)
             print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
 
-            r = test_cansn(nb, node)
+        # ── CAN ──
+        if args.mode in ("all", "can"):
+            print("\n=== CAN 总线测试 ===")
+            r = test_can_scan(nb)
             all_results.append(r)
             print(f"  {r['status']:4s} {r['name']}  | {r.get('detail','')}")
 

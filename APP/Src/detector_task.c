@@ -58,7 +58,6 @@ static void         _detector_task_on_error(App_Status_t err);
 static void _dbg_cmd_detector(int argc, char **argv);
 
 /* Internal helpers */
-static int  _hex_to_byte(const char *hex, uint8_t *out);
 static void _print_hex(const char *prefix, const uint8_t *data, uint16_t len);
 
 /**
@@ -110,7 +109,7 @@ const App_Module_t g_detector_task_module = {
 
 static App_Status_t _detector_task_init(void)
 {
-    if (Log_RegisterDbgCmd("detector", _dbg_cmd_detector) != HAL_OK)
+    if (Log_RegisterDbgCmdEx("detector", _dbg_cmd_detector, "Detector board control (CAN)") != HAL_OK)
     {
         LOG_ERROR("Detector: failed to register 'detector' debug command");
         return APP_ERROR;
@@ -1297,26 +1296,6 @@ static int _wait_response(uint8_t node_id, uint8_t cmd_echo,
         HAL_Delay(DETECTOR_POLL_INTERVAL_MS);
     }
 
-    return 0;
-}
-
-/**
-  * @brief  Convert a hex string to a byte
-  */
-static int _hex_to_byte(const char *hex, uint8_t *out)
-{
-    if (hex == NULL || out == NULL)
-    {
-        return -1;
-    }
-
-    long val = strtol(hex, NULL, 16);
-    if (val < 0 || val > 255)
-    {
-        return -1;
-    }
-
-    *out = (uint8_t)(val & 0xFFU);
     return 0;
 }
 

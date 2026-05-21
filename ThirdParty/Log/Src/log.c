@@ -41,6 +41,7 @@
 typedef struct {
     const char        *name;  /*!< Command name (e.g. "att", "help") */
     Log_DbgCmdFunc_t   func;  /*!< Callback function                */
+    const char        *help;  /*!< One-line description (NULL = none) */
 } Log_DbgCmdEntry_t;
 
 /* Private define ------------------------------------------------------------*/
@@ -339,6 +340,18 @@ void Log_DbgProcess(void)
   */
 HAL_StatusTypeDef Log_RegisterDbgCmd(const char *cmd, Log_DbgCmdFunc_t func)
 {
+    return Log_RegisterDbgCmdEx(cmd, func, NULL);
+}
+
+/**
+  * @brief  Register a custom debug command with help description
+  * @param  cmd   Command name string
+  * @param  func  Callback function
+  * @param  help  One-line description shown by 'help' (NULL = no description)
+  * @retval HAL_OK on success, HAL_ERROR if table full
+  */
+HAL_StatusTypeDef Log_RegisterDbgCmdEx(const char *cmd, Log_DbgCmdFunc_t func, const char *help)
+{
     if (cmd == NULL || func == NULL)
     {
         return HAL_ERROR;
@@ -351,6 +364,7 @@ HAL_StatusTypeDef Log_RegisterDbgCmd(const char *cmd, Log_DbgCmdFunc_t func)
 
     g_dbg_cmds[g_dbg_cmd_count].name = cmd;
     g_dbg_cmds[g_dbg_cmd_count].func = func;
+    g_dbg_cmds[g_dbg_cmd_count].help = help;
     g_dbg_cmd_count++;
 
     return HAL_OK;
@@ -647,7 +661,7 @@ _ringbuf_done:
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'help' command — list all registered commands
+  * @brief  'help' command — list all registered commands with descriptions
   */
 static void _dbg_cmd_help(int argc, char **argv)
 {
@@ -657,7 +671,14 @@ static void _dbg_cmd_help(int argc, char **argv)
     Log_Print(LOG_LEVEL_INFO, "=== Debug CLI Commands ===");
     for (uint8_t i = 0U; i < g_dbg_cmd_count; i++)
     {
-        Log_Print(LOG_LEVEL_INFO, "  %s", g_dbg_cmds[i].name);
+        if (g_dbg_cmds[i].help != NULL)
+        {
+            Log_Print(LOG_LEVEL_INFO, "  %-10s — %s", g_dbg_cmds[i].name, g_dbg_cmds[i].help);
+        }
+        else
+        {
+            Log_Print(LOG_LEVEL_INFO, "  %s", g_dbg_cmds[i].name);
+        }
     }
     Log_Print(LOG_LEVEL_INFO, "==========================");
 }

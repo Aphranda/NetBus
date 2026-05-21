@@ -35,7 +35,8 @@
   *            rfsw inputs <addr>           — Read 4 discrete inputs
   *            rfsw status <addr>           — Read device status register
   *            rfsw id <addr> <new_id>      — Change device Modbus address
-  *            rfsw raw <addr> <hex...>     — Send raw Modbus frame & show response
+  *          Modbus raw frame injection:
+ *            modbus <hex...>              — Send raw Modbus frame (CRC auto)
   ******************************************************************************
   * @attention
   *
@@ -89,8 +90,9 @@ static App_Status_t _rfsw_task_init(void);
 static App_Status_t _rfsw_task_process(void);
 static void         _rfsw_task_on_error(App_Status_t err);
 
-/* Debug CLI command handler */
+/* Debug CLI command handlers */
 static void _dbg_cmd_rfsw(int argc, char **argv);
+static void _dbg_cmd_modbus(int argc, char **argv);
 
 /* High-level RF switch operations */
 static Modbus_Result_t _rfsw_read_channel(uint8_t addr, uint8_t *channel);
@@ -153,14 +155,22 @@ static App_Status_t _rfsw_task_init(void)
              (unsigned long)Modbus_GetTimeout());
 
     /* Register "rfsw" debug CLI command */
-    if (Log_RegisterDbgCmd("rfsw", _dbg_cmd_rfsw) != HAL_OK)
+    if (Log_RegisterDbgCmdEx("rfsw", _dbg_cmd_rfsw, "RF switch control (Modbus)") != HAL_OK)
     {
         LOG_ERROR("RFSW: failed to register 'rfsw' debug command");
         return APP_ERROR;
     }
 
+    /* Register "modbus" debug CLI command */
+    if (Log_RegisterDbgCmdEx("modbus", _dbg_cmd_modbus, "Raw Modbus frame injection") != HAL_OK)
+    {
+        LOG_ERROR("RFSW: failed to register 'modbus' debug command");
+        return APP_ERROR;
+    }
+
     LOG_INFO("RFSW: initialized (UART8 DMA+IDLE, DE=PE3)");
     LOG_INFO("RFSW: type 'rfsw' for SP10T switch control commands");
+    LOG_INFO("RFSW: type 'modbus' for raw Modbus frame injection");
 
     return APP_OK;
 }
@@ -411,7 +421,6 @@ static Modbus_Result_t _rfsw_write_device_id(uint8_t addr, uint8_t new_id)
   *           rfsw inputs <addr>           — Read 4 discrete inputs
   *           rfsw status <addr>           — Read device status register
   *           rfsw id <addr> <new_id>      — Change device Modbus address
-  *           rfsw raw <addr> <hex...>     — Send raw Modbus frame & show response
   *
   *         Examples:
   *           rfsw get 1                   — Read channel from device at addr 1
@@ -420,7 +429,6 @@ static Modbus_Result_t _rfsw_write_device_id(uint8_t addr, uint8_t new_id)
   *           rfsw info 1                  — Dump all device info
   *           rfsw outputs 1               — Read all output coil states
   *           rfsw output 1 0 1            — Turn ON output 0 (S0_CA) on device 1
-  *           rfsw raw 1 03 00 00 00 01    — Send FC=0x03 read channel (CRC auto)
   */
 static void _dbg_cmd_rfsw(int argc, char **argv)
 {
@@ -436,7 +444,6 @@ static void _dbg_cmd_rfsw(int argc, char **argv)
         LOG_INFO("  rfsw inputs <addr>           — Read 4 discrete inputs");
         LOG_INFO("  rfsw status <addr>           — Read device status register");
         LOG_INFO("  rfsw id <addr> <new_id>      — Change device Modbus address");
-        LOG_INFO("  rfsw raw <addr> <hex...>     — Send raw Modbus frame");
         LOG_INFO("Examples:");
         LOG_INFO("  rfsw get 1         — read channel from device 1");
         LOG_INFO("  rfsw set 1 5       — set device 1 to channel 5");
@@ -844,80 +851,88 @@ static void _dbg_cmd_rfsw(int argc, char **argv)
         return;
     }
 
-    /* ── rfsw raw <addr> <hex bytes...> ───────────────────────────────────── */
-    if (strcmp(sub, "raw") == 0)
+    /* ── Unknown sub-command ─────────────────────────────────────────────── */
+    LOG_INFO("Error: unknown sub-command '%s'. Type 'rfsw' for usage.", sub);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Debug CLI — "modbus" command (raw Modbus RTU frame injection)              */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+/**
+  * @brief  'modbus' debug CLI command — send raw Modbus RTU frame
+  *
+  *         Usage:
+  *           modbus <hex bytes...>
+  *             - Send a raw Modbus RTU frame and display the response
+  *             - CRC16 is automatically appended to the frame
+  *             - Frame should include address + function code + data
+  *             - Example: modbus 01 03 00 00 00 01  →  read channel
+  */
+static void _dbg_cmd_modbus(int argc, char **argv)
+{
+    if (argc < 2)
     {
-        if (argc < 4)
-        {
-            LOG_INFO("Error: missing arguments. Usage: rfsw raw <addr> <hex bytes...>");
-            LOG_INFO("  Sends a raw Modbus frame (ADDR + FC + DATA) and appends CRC16.");
-            LOG_INFO("  Example: rfsw raw 1 03 00 00 00 01  →  read channel from device 1");
-            return;
-        }
-
-        long addr = strtol(argv[2], NULL, 0);
-        if (addr < 1 || addr > 247)
-        {
-            LOG_INFO("Error: invalid address '%s' (1-247)", argv[2]);
-            return;
-        }
-
-        /* Build request frame: [addr] [fc] [data...] then append CRC */
-        uint16_t frame_len = 0U;
-        g_rfsw_raw_buf[frame_len++] = (uint8_t)(addr & 0xFFU);
-
-        for (int i = 3; i < argc && frame_len < (MODBUS_MAX_FRAME_LEN - 2U); i++)
-        {
-            uint8_t byte;
-            if (_hex_to_byte(argv[i], &byte) != 0)
-            {
-                LOG_INFO("Error: invalid hex byte '%s' at position %d", argv[i], i - 2);
-                return;
-            }
-            g_rfsw_raw_buf[frame_len++] = byte;
-        }
-
-        if (frame_len <= 1U)
-        {
-            LOG_INFO("Error: no function code or data bytes provided");
-            return;
-        }
-
-        /* Compute and append CRC16 */
-        uint16_t crc = Modbus_CRC16(g_rfsw_raw_buf, frame_len);
-        g_rfsw_raw_buf[frame_len++] = (uint8_t)(crc & 0xFFU);
-        g_rfsw_raw_buf[frame_len++] = (uint8_t)((crc >> 8) & 0xFFU);
-
-        LOG_INFO("RFSW[%ld]: sending raw frame (%u bytes)", addr, (unsigned)frame_len);
-        _print_hex("RFSW TX", g_rfsw_raw_buf, frame_len);
-
-        /* Send and wait for response */
-        uint8_t  resp[MODBUS_MAX_FRAME_LEN];
-        uint16_t resp_len = (uint16_t)sizeof(resp);
-
-        Modbus_Result_t res = Modbus_SendRaw(g_rfsw_raw_buf, frame_len, resp, &resp_len);
-
-        if (res.status == MODBUS_OK)
-        {
-            _print_hex("RFSW RX", resp, resp_len);
-
-            /* Check for exception */
-            if (resp_len >= 3U && (resp[1] & 0x80U))
-            {
-                LOG_INFO("RFSW[%ld]: EXCEPTION (code=0x%02X: %s)",
-                         addr, (unsigned)resp[2],
-                         Modbus_ExceptionString(resp[2]));
-            }
-        }
-        else
-        {
-            _print_modbus_result(res);
-        }
+        LOG_INFO("Modbus raw frame injection (RS485):");
+        LOG_INFO("  modbus <hex bytes...>  — send raw Modbus frame (CRC auto)");
+        LOG_INFO("  Frame must include address + function code + data.");
+        LOG_INFO("  CRC16 is computed and appended automatically.");
+        LOG_INFO("Examples:");
+        LOG_INFO("  modbus 01 03 00 00 00 01   — read channel from device 1");
+        LOG_INFO("  modbus 01 06 00 00 00 05   — write channel 5 to device 1");
         return;
     }
 
-    /* ── Unknown sub-command ─────────────────────────────────────────────── */
-    LOG_INFO("Error: unknown sub-command '%s'. Type 'rfsw' for usage.", sub);
+    /* Build request frame from hex bytes */
+    uint16_t frame_len = 0U;
+
+    for (int i = 1; i < argc && frame_len < (MODBUS_MAX_FRAME_LEN - 2U); i++)
+    {
+        uint8_t byte;
+        if (_hex_to_byte(argv[i], &byte) != 0)
+        {
+            LOG_INFO("Error: invalid hex byte '%s' at position %d", argv[i], i);
+            return;
+        }
+        g_rfsw_raw_buf[frame_len++] = byte;
+    }
+
+    if (frame_len < 2U)
+    {
+        LOG_INFO("Error: frame must include at least address + function code");
+        return;
+    }
+
+    /* Compute and append CRC16 */
+    uint16_t crc = Modbus_CRC16(g_rfsw_raw_buf, frame_len);
+    g_rfsw_raw_buf[frame_len++] = (uint8_t)(crc & 0xFFU);
+    g_rfsw_raw_buf[frame_len++] = (uint8_t)((crc >> 8) & 0xFFU);
+
+    LOG_INFO("Modbus: sending raw frame (%u bytes)", (unsigned)frame_len);
+    _print_hex("Modbus TX", g_rfsw_raw_buf, frame_len);
+
+    /* Send and wait for response */
+    uint8_t  resp[MODBUS_MAX_FRAME_LEN];
+    uint16_t resp_len = (uint16_t)sizeof(resp);
+
+    Modbus_Result_t res = Modbus_SendRaw(g_rfsw_raw_buf, frame_len, resp, &resp_len);
+
+    if (res.status == MODBUS_OK)
+    {
+        _print_hex("Modbus RX", resp, resp_len);
+
+        /* Check for exception */
+        if (resp_len >= 3U && (resp[1] & 0x80U))
+        {
+            LOG_INFO("Modbus: EXCEPTION (code=0x%02X: %s)",
+                     (unsigned)resp[2],
+                     Modbus_ExceptionString(resp[2]));
+        }
+    }
+    else
+    {
+        _print_modbus_result(res);
+    }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */

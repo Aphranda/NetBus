@@ -44,7 +44,7 @@ const App_Module_t g_attenuator_task_module = {
 
 static App_Status_t _attenuator_task_init(void)
 {
-    if (Log_RegisterDbgCmd("att", _dbg_cmd_att) != HAL_OK)
+    if (Log_RegisterDbgCmdEx("att", _dbg_cmd_att, "Attenuator control (A/B 0-15)") != HAL_OK)
     {
         LOG_ERROR("Attenuator: failed to register 'att' debug command");
         return APP_ERROR;
