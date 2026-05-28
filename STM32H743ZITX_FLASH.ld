@@ -155,6 +155,34 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM_D1
 
+  /* Ethernet Rx DMA descriptors section */
+  .RxDescripSection (NOLOAD) :
+  {
+    . = ABSOLUTE(0x30040000);
+    *(.RxDescripSection)
+  } >RAM_D2
+
+  /* Ethernet Tx DMA descriptors section */
+  .TxDescripSection (NOLOAD) :
+  {
+    . = ABSOLUTE(0x30040060);
+    *(.TxDescripSection)
+  } >RAM_D2
+
+  /* Ethernet Rx buffer pool section (zero-copy custom pbufs) */
+  .Rx_PoolSection (NOLOAD) :
+  {
+    . = ABSOLUTE(0x30040200);
+    *(.Rx_PoolSection)
+  } >RAM_D2
+
+  /* LwIP memory heap */
+  .lwip_sec (NOLOAD) :
+  {
+    . = ABSOLUTE(0x30044000);
+    *(.lwip_sec)
+  } >RAM_D2
+
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :
   {
