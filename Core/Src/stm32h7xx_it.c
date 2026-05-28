@@ -56,6 +56,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern ETH_HandleTypeDef heth;
 extern FDCAN_HandleTypeDef hfdcan1;
 extern DMA_HandleTypeDef hdma_uart7_rx;
 extern DMA_HandleTypeDef hdma_uart7_tx;
@@ -75,7 +76,7 @@ extern TIM_HandleTypeDef htim1;
 /**
   * @brief This function handles Non maskable interrupt.
   */
-__weak void NMI_Handler(void)
+void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
 
@@ -90,7 +91,7 @@ __weak void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-__weak void HardFault_Handler(void)
+void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
 
@@ -105,7 +106,7 @@ __weak void HardFault_Handler(void)
 /**
   * @brief This function handles Memory management fault.
   */
-__weak void MemManage_Handler(void)
+void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
 
@@ -120,7 +121,7 @@ __weak void MemManage_Handler(void)
 /**
   * @brief This function handles Pre-fetch fault, memory access fault.
   */
-__weak void BusFault_Handler(void)
+void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
 
@@ -135,7 +136,7 @@ __weak void BusFault_Handler(void)
 /**
   * @brief This function handles Undefined instruction or illegal state.
   */
-__weak void UsageFault_Handler(void)
+void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
 
@@ -148,22 +149,9 @@ __weak void UsageFault_Handler(void)
 }
 
 /**
-  * @brief This function handles System service call via SWI instruction.
-  */
-__weak void SVC_Handler(void)
-{
-  /* USER CODE BEGIN SVCall_IRQn 0 */
-
-  /* USER CODE END SVCall_IRQn 0 */
-  /* USER CODE BEGIN SVCall_IRQn 1 */
-
-  /* USER CODE END SVCall_IRQn 1 */
-}
-
-/**
   * @brief This function handles Debug monitor.
   */
-__weak void DebugMon_Handler(void)
+void DebugMon_Handler(void)
 {
   /* USER CODE BEGIN DebugMonitor_IRQn 0 */
 
@@ -171,33 +159,6 @@ __weak void DebugMon_Handler(void)
   /* USER CODE BEGIN DebugMonitor_IRQn 1 */
 
   /* USER CODE END DebugMonitor_IRQn 1 */
-}
-
-/**
-  * @brief This function handles Pendable request for system service.
-  */
-__weak void PendSV_Handler(void)
-{
-  /* USER CODE BEGIN PendSV_IRQn 0 */
-
-  /* USER CODE END PendSV_IRQn 0 */
-  /* USER CODE BEGIN PendSV_IRQn 1 */
-
-  /* USER CODE END PendSV_IRQn 1 */
-}
-
-/**
-  * @brief This function handles System tick timer.
-  */
-__weak void SysTick_Handler(void)
-{
-  /* USER CODE BEGIN SysTick_IRQn 0 */
-
-  /* USER CODE END SysTick_IRQn 0 */
-
-  /* USER CODE BEGIN SysTick_IRQn 1 */
-
-  /* USER CODE END SysTick_IRQn 1 */
 }
 
 /******************************************************************************/
@@ -210,7 +171,7 @@ __weak void SysTick_Handler(void)
 /**
   * @brief This function handles DMA1 stream0 global interrupt.
   */
-__weak void DMA1_Stream0_IRQHandler(void)
+void DMA1_Stream0_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream0_IRQn 0 */
 
@@ -224,7 +185,7 @@ __weak void DMA1_Stream0_IRQHandler(void)
 /**
   * @brief This function handles DMA1 stream1 global interrupt.
   */
-__weak void DMA1_Stream1_IRQHandler(void)
+void DMA1_Stream1_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream1_IRQn 0 */
 
@@ -238,7 +199,7 @@ __weak void DMA1_Stream1_IRQHandler(void)
 /**
   * @brief This function handles DMA1 stream2 global interrupt.
   */
-__weak void DMA1_Stream2_IRQHandler(void)
+void DMA1_Stream2_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream2_IRQn 0 */
 
@@ -252,7 +213,7 @@ __weak void DMA1_Stream2_IRQHandler(void)
 /**
   * @brief This function handles DMA1 stream3 global interrupt.
   */
-__weak void DMA1_Stream3_IRQHandler(void)
+void DMA1_Stream3_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream3_IRQn 0 */
 
@@ -266,7 +227,7 @@ __weak void DMA1_Stream3_IRQHandler(void)
 /**
   * @brief This function handles FDCAN1 interrupt 0.
   */
-__weak void FDCAN1_IT0_IRQHandler(void)
+void FDCAN1_IT0_IRQHandler(void)
 {
   /* USER CODE BEGIN FDCAN1_IT0_IRQn 0 */
 
@@ -280,7 +241,7 @@ __weak void FDCAN1_IT0_IRQHandler(void)
 /**
   * @brief This function handles FDCAN1 interrupt 1.
   */
-__weak void FDCAN1_IT1_IRQHandler(void)
+void FDCAN1_IT1_IRQHandler(void)
 {
   /* USER CODE BEGIN FDCAN1_IT1_IRQn 0 */
 
@@ -294,7 +255,7 @@ __weak void FDCAN1_IT1_IRQHandler(void)
 /**
   * @brief This function handles TIM1 update interrupt.
   */
-__weak void TIM1_UP_IRQHandler(void)
+void TIM1_UP_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_IRQn 0 */
 
@@ -306,9 +267,23 @@ __weak void TIM1_UP_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles Ethernet global interrupt.
+  */
+void ETH_IRQHandler(void)
+{
+  /* USER CODE BEGIN ETH_IRQn 0 */
+
+  /* USER CODE END ETH_IRQn 0 */
+  HAL_ETH_IRQHandler(&heth);
+  /* USER CODE BEGIN ETH_IRQn 1 */
+
+  /* USER CODE END ETH_IRQn 1 */
+}
+
+/**
   * @brief This function handles UART7 global interrupt.
   */
-__weak void UART7_IRQHandler(void)
+void UART7_IRQHandler(void)
 {
   /* USER CODE BEGIN UART7_IRQn 0 */
 
@@ -322,7 +297,7 @@ __weak void UART7_IRQHandler(void)
 /**
   * @brief This function handles UART8 global interrupt.
   */
-__weak void UART8_IRQHandler(void)
+void UART8_IRQHandler(void)
 {
   /* USER CODE BEGIN UART8_IRQn 0 */
 

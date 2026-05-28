@@ -59,6 +59,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define UART8_DE_Pin GPIO_PIN_3
 #define UART8_DE_GPIO_Port GPIOE
+#define ETH_RST_Pin GPIO_PIN_15
+#define ETH_RST_GPIO_Port GPIOE
 #define CTRL_A1_Pin GPIO_PIN_8
 #define CTRL_A1_GPIO_Port GPIOC
 #define CTRL_A2_Pin GPIO_PIN_9

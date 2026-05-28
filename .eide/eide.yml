@@ -8,6 +8,8 @@ srcDirs:
   - Drivers
   - APP
   - ThirdParty
+  - Middlewares
+  - LWIP
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -31,6 +33,15 @@ targets:
         - Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
         - Drivers/CMSIS/Device/ST/STM32H7xx/Include
         - Drivers/CMSIS/Include
+        - Drivers/CMSIS/RTOS2/Include
+        - Drivers/BSP/Components/lan8742
+        - Middlewares/Third_Party/FreeRTOS/Source/include
+        - Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
+        - Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
+        - Middlewares/Third_Party/LwIP/src/include
+        - Middlewares/Third_Party/LwIP/system
+        - LWIP/App
+        - LWIP/Target
         - ThirdParty/Log/Inc
         - APP/Inc
         - ThirdParty/IO/Inc
@@ -114,6 +125,9 @@ targets:
         - Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
         - Drivers/CMSIS/Device/ST/STM32H7xx/Include
         - Drivers/CMSIS/Include
+        - Middlewares/Third_Party/FreeRTOS/Source/include
+        - Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
+        - Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
         - ThirdParty/Log/Inc
       libList: []
     excludeList:
