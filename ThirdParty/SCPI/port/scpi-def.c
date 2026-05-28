@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "cmsis_os2.h"
 #include "scpi/scpi.h"
 #include "scpi/error.h"
 #include "scpi/ieee488.h"
@@ -1139,6 +1140,8 @@ void SCPI_SystemInit(void)
               scpi_error_queue_data, SCPI_ERROR_QUEUE_SIZE);
 }
 
+static osMutexId_t scpi_parse_mutex = NULL;
+
 /**
   * @brief  Try to parse a line as SCPI. Returns TRUE if recognized.
   */
@@ -1146,6 +1149,9 @@ scpi_bool_t SCPI_TryParse(const char *line)
 {
     if (line == NULL || line[0] == '\0')
         return FALSE;
+
+    if (scpi_parse_mutex == NULL)
+        scpi_parse_mutex = osMutexNew(NULL);
 
     /* Append \n terminator — SCPI_Parse requires it to dispatch */
     size_t len = strlen(line);
@@ -1156,18 +1162,15 @@ scpi_bool_t SCPI_TryParse(const char *line)
     buf[len] = '\n';
     buf[len + 1] = '\0';
 
-    /* Track whether SCPI matched a command — findCommandHeader() updates
-       param_list.cmd when it finds a match. If the pointer doesn't change,
-       SCPI didn't recognize the input and we should let the debug CLI try. */
+    /* Track whether SCPI matched a command */
     const scpi_command_t *prev_cmd = scpi_context.param_list.cmd;
 
+    osMutexAcquire(scpi_parse_mutex, osWaitForever);
     scpi_bool_t result = SCPI_Parse(&scpi_context, buf, (int)(len + 1));
+    osMutexRelease(scpi_parse_mutex);
 
     /* Flush the SCPI output */
     SCPI_Flush(&scpi_context);
 
-    /* Return TRUE if the command was recognized, even if the callback
-       returned an error. Only return FALSE for truly unrecognized input,
-       so the debug CLI fallback doesn't pollute SCPI error responses. */
     return result || (scpi_context.param_list.cmd != prev_cmd);
 }

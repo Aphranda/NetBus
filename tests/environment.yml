@@ -1,0 +1,5 @@
+name: netbus-test
+channels:
+  - defaults
+dependencies:
+  - python=3.11

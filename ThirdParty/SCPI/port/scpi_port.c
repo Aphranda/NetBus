@@ -48,6 +48,7 @@
 #include "scpi/ieee488.h"
 #include "scpi-def.h"
 #include "log.h"
+#include "net_scpi.h"
 
 /* ── SCPI Interface Callbacks ──────────────────────────────────────────────── */
 
@@ -61,6 +62,7 @@ size_t SCPI_Write(scpi_t *context, const char *data, size_t len)
 {
     (void)context;
     Log_WriteRaw(data, len);
+    NetSCPI_Write(data, len);
     return len;
 }
 
