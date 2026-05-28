@@ -33,7 +33,7 @@
 
 /* Within 'USER CODE' section, code will be kept by default at each generation */
 /* USER CODE BEGIN 0 */
-
+#include "log.h"
 /* USER CODE END 0 */
 
 /* Private define ------------------------------------------------------------*/
@@ -340,7 +340,9 @@ static void low_level_init(struct netif *netif)
     netif_set_up(netif);
     netif_set_link_up(netif);
 /* USER CODE BEGIN PHY_POST_CONFIG */
-
+    LOG_INFO("ETH: PHY Link Up, %s %s-duplex",
+             (speed == ETH_SPEED_100M) ? "100M" : "10M",
+             (duplex == ETH_FULLDUPLEX_MODE) ? "full" : "half");
 /* USER CODE END PHY_POST_CONFIG */
     }
 
@@ -851,7 +853,15 @@ void ethernet_link_thread(void* argument)
   }
 
 /* USER CODE BEGIN ETH link Thread core code for User BSP */
-
+  {
+    static uint8_t prev_link = 0xFF;
+    uint8_t cur_link = netif_is_link_up(netif) ? 1 : 0;
+    if (cur_link != prev_link) {
+      if (cur_link) LOG_INFO("ETH: Link UP (cable plugged)");
+      else          LOG_WARN("ETH: Link DOWN (cable removed)");
+      prev_link = cur_link;
+    }
+  }
 /* USER CODE END ETH link Thread core code for User BSP */
 
     osDelay(100);
