@@ -76,6 +76,13 @@ const osThreadAttr_t Can_Task_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for SCPI_Task */
+osThreadId_t SCPI_TaskHandle;
+const osThreadAttr_t SCPI_Task_attributes = {
+  .name = "SCPI_Task",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
 /* Definitions for SCPI_Mutex */
 osMutexId_t SCPI_MutexHandle;
 const osMutexAttr_t SCPI_Mutex_attributes = {
@@ -96,6 +103,7 @@ void StartDefaultTask(void *argument);
 void StartETHTask(void *argument);
 void StartModbusTask(void *argument);
 void StartCanTask(void *argument);
+void StartSCPITask(void *argument);
 
 extern void MX_LWIP_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -144,6 +152,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of Can_Task */
   Can_TaskHandle = osThreadNew(StartCanTask, NULL, &Can_Task_attributes);
+
+  /* creation of SCPI_Task */
+  SCPI_TaskHandle = osThreadNew(StartSCPITask, NULL, &SCPI_Task_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -227,6 +238,24 @@ __weak void StartCanTask(void *argument)
     osDelay(1);
   }
   /* USER CODE END StartCanTask */
+}
+
+/* USER CODE BEGIN Header_StartSCPITask */
+/**
+* @brief Function implementing the SCPI_Task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartSCPITask */
+__weak void StartSCPITask(void *argument)
+{
+  /* USER CODE BEGIN StartSCPITask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartSCPITask */
 }
 
 /* Private application code --------------------------------------------------*/
