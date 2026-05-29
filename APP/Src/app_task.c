@@ -40,6 +40,7 @@
 #include "scpi_queue.h"
 #include "lwip.h"
 #include "net_scpi.h"
+#include "lwip/apps/httpd.h"
 #include "log.h"
 #include "cmsis_os2.h"
 #include <string.h>
@@ -282,7 +283,8 @@ void StartETHTask(void *argument)
 {
     (void)argument;
     MX_LWIP_Init();
-    LOG_INFO("LWIP init done, starting SCPI server");
+    httpd_init();
+    LOG_INFO("LWIP init done, HTTPD started, starting SCPI server");
     NetSCPI_Init();
 
     for (;;)
