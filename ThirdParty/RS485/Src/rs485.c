@@ -63,6 +63,9 @@ typedef struct {
     uint16_t tail;                     /*!< Read index (application)     */
 } RS485_RingBuf_t;
 
+_Static_assert(sizeof(((RS485_RingBuf_t *)0)->buf) % 32 == 0,
+               "RS485 DMA buffer size must be 32B multiple");
+
 /* Private define ------------------------------------------------------------*/
 
 /**

@@ -116,6 +116,7 @@ static osMessageQueueId_t g_line_queue = NULL;
   *        lines, pushing them into g_line_queue.
   */
 static uint8_t  g_dma_rx_buf[LOG_DBG_BUF_SIZE] __attribute__((aligned(32)));
+_Static_assert(sizeof(g_dma_rx_buf) % 32 == 0, "log DMA buffer size must be 32B multiple");
 static uint16_t g_rb_rd_idx;            /*!< Ring buffer read index */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -285,6 +286,18 @@ void Log_SetLevel(uint8_t level)
 uint8_t Log_GetLevel(void)
 {
     return g_log_config.level;
+}
+
+/**
+  * @brief  Convert a hex string to byte value
+  */
+int Log_HexToByte(const char *hex, uint8_t *out)
+{
+    if (hex == NULL || out == NULL) return -1;
+    long val = strtol(hex, NULL, 16);
+    if (val < 0 || val > 255) return -1;
+    *out = (uint8_t)(val & 0xFFU);
+    return 0;
 }
 
 /* ── Debug command exported API ───────────────────────────────────────────── */

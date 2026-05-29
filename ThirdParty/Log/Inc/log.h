@@ -261,6 +261,14 @@ void Log_SetLevel(uint8_t level);
   */
 uint8_t Log_GetLevel(void);
 
+/**
+  * @brief  Convert a hex string to byte value (e.g. "0x1A", "1A", "FF")
+  * @param  hex  Null-terminated hex string
+  * @param  out  Output byte
+  * @retval 0 on success, -1 on error
+  */
+int Log_HexToByte(const char *hex, uint8_t *out);
+
 #ifdef __cplusplus
 }
 #endif

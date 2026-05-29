@@ -48,7 +48,6 @@ static void         _can_task_on_error(App_Status_t err);
 static void _dbg_cmd_can(int argc, char **argv);
 static void _dbg_cmd_cansend(int argc, char **argv);
 static void _dbg_cmd_canscan(int argc, char **argv);
-static int  _can_hex_to_byte(const char *hex, uint8_t *out);
 static void _can_print_hex(const char *prefix, const uint8_t *data, uint16_t len);
 
 /* Exported variables --------------------------------------------------------*/
@@ -169,7 +168,7 @@ static void _dbg_cmd_cansend(int argc, char **argv)
     for (int i = 2; i < argc && data_len < CANRAW_MAX_BYTES; i++)
     {
         uint8_t byte;
-        if (_can_hex_to_byte(argv[i], &byte) != 0)
+        if (Log_HexToByte(argv[i], &byte) != 0)
         {
             LOG_INFO("Error: invalid hex byte '%s' at position %d", argv[i], i - 1);
             return;
@@ -380,23 +379,6 @@ static void _dbg_cmd_canscan(int argc, char **argv)
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Internal Helpers                                                           */
 /* ─────────────────────────────────────────────────────────────────────────── */
-
-static int _can_hex_to_byte(const char *hex, uint8_t *out)
-{
-    if (hex == NULL || out == NULL)
-    {
-        return -1;
-    }
-
-    long val = strtol(hex, NULL, 16);
-    if (val < 0 || val > 255)
-    {
-        return -1;
-    }
-
-    *out = (uint8_t)(val & 0xFFU);
-    return 0;
-}
 
 static void _can_print_hex(const char *prefix, const uint8_t *data, uint16_t len)
 {

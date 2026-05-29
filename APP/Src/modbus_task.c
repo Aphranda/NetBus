@@ -27,7 +27,6 @@ static App_Status_t _modbus_task_init(void);
 static App_Status_t _modbus_task_process(void);
 static void         _modbus_task_on_error(App_Status_t err);
 static void _dbg_cmd_modbus(int argc, char **argv);
-static int  _hex_to_byte(const char *hex, uint8_t *out);
 
 const App_Module_t g_modbus_task_module = {
     .name     = "Modbus",
@@ -111,7 +110,7 @@ static void _dbg_cmd_modbus(int argc, char **argv)
     for (int i = 1; i < argc && frame_len < (MODBUS_MAX_FRAME_LEN - 2U); i++)
     {
         uint8_t byte;
-        if (_hex_to_byte(argv[i], &byte) != 0)
+        if (Log_HexToByte(argv[i], &byte) != 0)
         {
             LOG_INFO("Error: invalid hex '%s'", argv[i]);
             return;
@@ -147,13 +146,4 @@ static void _dbg_cmd_modbus(int argc, char **argv)
     {
         LOG_ERROR("Modbus: %s", Modbus_StatusString(res.status));
     }
-}
-
-static int _hex_to_byte(const char *hex, uint8_t *out)
-{
-    if (hex == NULL || out == NULL) return -1;
-    long val = strtol(hex, NULL, 16);
-    if (val < 0 || val > 255) return -1;
-    *out = (uint8_t)(val & 0xFFU);
-    return 0;
 }

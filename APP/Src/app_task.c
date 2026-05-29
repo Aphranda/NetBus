@@ -229,8 +229,9 @@ void App_Task_Loop(void)
                     }
                 }
             }
-            osDelay(1);  /* Yield to ETH_Task (LWIP) and other lower-priority tasks */
         }
+        osDelay(1);  /* Yield once per loop iteration */
+        
     }
 }
 
@@ -274,7 +275,7 @@ void StartETHTask(void *argument)
 
     for (;;)
     {
-        osDelay(1000);
+        osDelay(1);  /* Task idle — LWIP runs in its own threads */
     }
 }
 
