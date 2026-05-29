@@ -155,6 +155,9 @@ void RS485_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     (void)Size;
 
+    /* ── Invalidate D-Cache for DMA buffer ──────────────────────────────── */
+    SCB_InvalidateDCache_by_Addr((uint32_t *)g_rs485.rx_ring.buf, RS485_RX_BUF_SIZE);
+
     /* ── Compute current DMA write position from NDTR ──────────────────── */
     /* NDTR decrements from RS485_RX_BUF_SIZE → 0 as DMA fills the buffer.
      * Write index = (BUF_SIZE - NDTR) gives the current write position.

@@ -454,6 +454,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     /* Only process UART7 -- the log/debug UART */
     if (huart != g_log_config.huart) return;
 
+    /* ── Invalidate D-Cache for DMA buffer ──────────────────────────────── */
+    /* DMA writes directly to SRAM, CPU reads via D-Cache. Without invalidation,
+     * the CPU may read stale cached data instead of fresh DMA-written bytes,
+     * causing character loss (e.g. "help" → "lp"). */
+    SCB_InvalidateDCache_by_Addr((uint32_t *)g_dma_rx_buf, LOG_DBG_BUF_SIZE);
+
     /* ── Local static line assembly buffer (ISR-private, no concurrent access) */
     static char line_buf[LOG_DBG_LINE_LEN];
     static uint8_t line_pos = 0U;
