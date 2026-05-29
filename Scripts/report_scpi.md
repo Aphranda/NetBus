@@ -1,6 +1,6 @@
 # NetBus SCPI-over-TCP 自动化测试报告
 
-**生成时间**: 2026-05-29 14:12:50  
+**生成时间**: 2026-05-29 15:02:03  
 **目标设备**: `192.168.1.10:5025`  
 **协议**: SCPI (IEEE 488.2) over TCP/IP  
 **测试节点**: DETector#1, ROUTe:SWITch#1  
@@ -12,78 +12,78 @@
 | 指标 | 值 |
 |------|----|
 | 总测试项 | 115 |
-| **PASS** | 113 |
-| **FAIL** | 1 |
+| **PASS** | 110 |
+| **FAIL** | 4 |
 | SKIP | 1 |
-| **通过率** | **98.3%** |
-| 总耗时 | 8.1s (8110ms) |
-| 平均响应 | 70.5ms
+| **通过率** | **95.7%** |
+| 总耗时 | 7.8s (7770ms) |
+| 平均响应 | 67.6ms
 
 ## 2. 子系统覆盖率
 
 | 子系统 | 命令覆盖 | 测试项 | 通过 | 说明 |
 |--------|----------|--------|------|------|
 | IEEE 488.2 | *IDN?, *STB?, *OPC?, *CLS, *RST, *WAI | 6 | 6 | 全标准命令 |
-| SYSTem | ATT A/B RW+验证, ERR, DET# SN/VERS/FLASH, CAN SEND/SCAN | 21 | 21 | 子系统全覆盖 |
+| SYSTem | ATT A/B RW+验证, ERR, DET# SN/VERS/FLASH, CAN SEND/SCAN | 19 | 19 | 子系统全覆盖 |
 | SENSe | TEMP?, POWer? | 2 | 2 | 只读查询 |
 | ROUTe:SWITch# | CHAN?/CHAN, MODE?, IDEN?, OUTP?, INP?, COND? | 10 | 10 | 含通道切换验证 |
 | STATus | OPER:EVEN?, QUES:EVEN? | 2 | 2 | |
-| DIAGnostic | DEBUG?/ON/OFF, ECHO?/ON/OFF | 9 | 9 | 含开关验证 |
+| DIAGnostic | DEBUG?/ON/OFF, ECHO?/ON/OFF | 8 | 8 | 含开关验证 |
 | 压力测试 | *IDN? x50 + 交替命令 x15 | 65 | 65 | |
 
 ## 3. 测试明细
 
 | # | 测试项 | 状态 | 耗时 | 详情 |
 |---|--------|------|------|------|
-| 1 | IEEE488.2 *IDN? | **PASS** | 213ms | IDN 正确: NetBus,PPA-NB100,00000000,v1.0.0 |
-| 2 | IEEE488.2 *STB? | **PASS** | 203ms | STB = 0 |
-| 3 | IEEE488.2 *OPC? | **PASS** | 215ms | OPC = 1 |
-| 4 | IEEE488.2 *CLS | **PASS** | 204ms | 已执行 |
-| 5 | IEEE488.2 *RST | **PASS** | 205ms | 已复位 |
-| 6 | IEEE488.2 *WAI | **PASS** | 204ms | 已执行 |
-| 7 | SYST:ERR? | **PASS** | 216ms | 错误队列为空 (No error) |
-| 8 | SYST:ERR:COUN? | **PASS** | 201ms | 错误计数 = 0 |
-| 9 | ATT A 读取 | **PASS** | 202ms | ATT A 读取 = 0 |
-| 10 | ATT B 读取 | **PASS** | 204ms | ATT B 读取 = 0 |
+| 1 | IEEE488.2 *IDN? | **PASS** | 207ms | IDN 正确: NetBus,PPA-NB100,00000000,v1.0.0 |
+| 2 | IEEE488.2 *STB? | **PASS** | 204ms | STB = 0 |
+| 3 | IEEE488.2 *OPC? | **PASS** | 217ms | OPC = 1 |
+| 4 | IEEE488.2 *CLS | **PASS** | 202ms | 已执行 |
+| 5 | IEEE488.2 *RST | **PASS** | 203ms | 已复位 |
+| 6 | IEEE488.2 *WAI | **PASS** | 202ms | 已执行 |
+| 7 | SYST:ERR? | **PASS** | 203ms | 错误队列为空 (No error) |
+| 8 | SYST:ERR:COUN? | **PASS** | 204ms | 错误计数 = 0 |
+| 9 | ATT A 读取 | **PASS** | 201ms | ATT A 读取 = 0 |
+| 10 | ATT B 读取 | **PASS** | 202ms | ATT B 读取 = 0 |
 | 11 | ATT 基准值 | **PASS** | 0ms | 当前: A=0, B=0 |
-| 12 | ATT A<-3 | **PASS** | 204ms | OK |
-| 13 | ATT B<-7 | **PASS** | 214ms | OK |
-| 14 | ATT A<-12 | **PASS** | 212ms | OK |
-| 15 | ATT B<-14 | **PASS** | 215ms | OK |
+| 12 | ATT A<-3 | **PASS** | 202ms | OK |
+| 13 | ATT B<-7 | **PASS** | 213ms | OK |
+| 14 | ATT A<-12 | **PASS** | 214ms | OK |
+| 15 | ATT B<-14 | **PASS** | 212ms | OK |
 | 16 | ATT 验证最终值 | **PASS** | 0ms | A=12, B=14 |
-| 17 | ATT A<-99 越界 | **PASS** | 201ms | 正确拒绝 (范围保护) |
-| 18 | ATT A<--1 越界 | **PASS** | 216ms | 正确拒绝 (范围保护) |
+| 17 | ATT A<-99 越界 | **FAIL** | 216ms | 未正确拒绝 |
+| 18 | ATT A<--1 越界 | **FAIL** | 204ms | 未正确拒绝 |
 | 19 | ATT 恢复原始值 | **PASS** | 0ms | 已恢复 |
-| 20 | DET1 SN? | **PASS** | 202ms | SN: "PINPRFB00300000038" |
-| 21 | DET1 VERS? | **PASS** | 314ms | 版本: 3.1.21 |
-| 22 | DET1 FLAS:INFO? | **PASS** | 228ms | Flash 信息已返回 (含 JEDEC ID) |
-| 23 | DET1 FLAS:DATA? @0x9001 | **PASS** | 203ms | 数据: ERROR: Flash read failed |
+| 20 | DET1 SN? | **PASS** | 203ms | SN: "PINPRFB00300000038" |
+| 21 | DET1 VERS? | **PASS** | 204ms | 版本: 3.1.21 |
+| 22 | DET1 FLAS:INFO? | **PASS** | 232ms | Flash 信息已返回 (含 JEDEC ID) |
+| 23 | DET1 FLAS:DATA? @0x9001 | **PASS** | 202ms | 数据:  |
 | 24 | DET1 LED | SKIP | 0ms | 写命令, 跳过以保护设备 |
-| 25 | SENS:DET1:TEMP? | **PASS** | 215ms | 温度: -2808,-17655,0 |
-| 26 | SENS:DET1:POW? | **PASS** | 205ms | 功率:  |
+| 25 | SENS:DET1:TEMP? | **PASS** | 202ms | 温度: ERROR: Flash read failed-18936,-11255,0 |
+| 26 | SENS:DET1:POW? | **PASS** | 203ms | 功率:  |
 | 27 | CAN:SCAN? (1-5) | **PASS** | 202ms | 无响应 |
-| 28 | CAN SEND (ID=0x101) | **PASS** | 263ms | CAN 响应: ERROR: Power query failed |
-| 29 | SW1 IDEN? | **PASS** | 214ms | 响应:  |
-| 30 | SW1 CHAN? | **PASS** | 342ms | 通道: 0 |
-| 31 | SW1 MODE? | **PASS** | 202ms | 模式:  |
-| 32 | SW1 OUTP? | **PASS** | 341ms | 输出: 0 responses"PPA-SP10",0,1,1,0,21504<br>1<br> |
-| 33 | SW1 INP? | **PASS** | 219ms | 输入: 0,0,0,0 |
-| 34 | SW1 COND? | **PASS** | 204ms | 状态: ERROR: Read status failed (Sla |
+| 28 | CAN SEND (ID=0x101) | **PASS** | 203ms | 无总线响应 |
+| 29 | SW1 IDEN? | **PASS** | 202ms | 响应:  |
+| 30 | SW1 CHAN? | **PASS** | 201ms | 通道:  |
+| 31 | SW1 MODE? | **PASS** | 203ms | 模式: ERROR: Power query f |
+| 32 | SW1 OUTP? | **PASS** | 206ms | 输出:  |
+| 33 | SW1 INP? | **PASS** | 373ms | 输入: 0 responses"PPA-SP10",0,1,1,0, |
+| 34 | SW1 COND? | **PASS** | 201ms | 状态:  |
 | 35 | SW1 当前通道 | **PASS** | 0ms | 当前 CH=1 |
-| 36 | SW1 CHAN 3 | **PASS** | 215ms | CHAN<-3 |
+| 36 | SW1 CHAN 3 | **PASS** | 202ms | CHAN<-3 |
 | 37 | SW1 验证 CH=3 | **PASS** | 0ms | CH=3 验证通过 |
 | 38 | SW1 恢复 CH=1 | **PASS** | 0ms | 已恢复 CH=1 |
-| 39 | STATus - OPERation | **PASS** | 204ms | 0 |
-| 40 | STATus - QUEStionable | **PASS** | 202ms | 0 |
+| 39 | STATus - OPERation | **PASS** | 203ms | 0 |
+| 40 | STATus - QUEStionable | **PASS** | 205ms | 0 |
 | 41 | DIAG:DEBUG? 初始 | **PASS** | 0ms | 当前: 1 |
-| 42 | DIAG:DEBUG OFF | **PASS** | 202ms | 已关闭 |
+| 42 | DIAG:DEBUG OFF | **PASS** | 204ms | 响应:  |
 | 43 | DIAG:DEBUG? 验证关闭 | **PASS** | 0ms | DEBUG=OFF |
-| 44 | DIAG:DEBUG ON | **PASS** | 201ms | 已开启 |
+| 44 | DIAG:DEBUG ON | **FAIL** | 205ms | 响应:  |
 | 45 | DIAG:DEBUG? 验证开启 | **PASS** | 0ms | DEBUG=ON |
 | 46 | DIAG:ECHO? 初始 | **PASS** | 0ms | 当前: ON |
 | 47 | DIAG:ECHO OFF | **PASS** | 203ms | 已关闭 |
-| 48 | DIAG:ECHO? 验证关闭 | **FAIL** | 0ms | 未关闭 |
-| 49 | DIAG:ECHO ON | **PASS** | 201ms | 已开启 |
+| 48 | DIAG:ECHO? 验证关闭 | **PASS** | 0ms | ECHO=OFF |
+| 49 | DIAG:ECHO ON | **FAIL** | 203ms | 已开启 |
 | 50 | DIAG:ECHO? 验证开启 | **PASS** | 0ms | ECHO=ON |
 | 51 | Stress #01 | **PASS** | 0ms | OK |
 | 52 | Stress #02 | **PASS** | 0ms | OK |
@@ -153,12 +153,36 @@
 
 ## 4. 失败项详情
 
-### 4.1 DIAG:ECHO? 验证关闭
+### 4.1 ATT A<-99 越界
 
-- **请求**: `DIAG:ECHO?`
+- **请求**: `SYST:ATT:A 99`
 - **响应**:
 ```
-ON
+(无响应)
+```
+
+### 4.2 ATT A<--1 越界
+
+- **请求**: `SYST:ATT:A -1`
+- **响应**:
+```
+(无响应)
+```
+
+### 4.3 DIAG:DEBUG ON
+
+- **请求**: `DIAG:DEBUG ON`
+- **响应**:
+```
+(无响应)
+```
+
+### 4.4 DIAG:ECHO ON
+
+- **请求**: `DIAG:ECHO ON`
+- **响应**:
+```
+(无响应)
 ```
 
 ## 5. 附录: 完整响应数据
@@ -169,7 +193,7 @@ ON
 ### IEEE488.2 *IDN?  (PASS)
 
 - **请求**: `*IDN?`
-- **耗时**: 213ms
+- **耗时**: 207ms
 - **详情**: IDN 正确: NetBus,PPA-NB100,00000000,v1.0.0
 - **响应**:
 ```
@@ -179,7 +203,7 @@ NetBus,PPA-NB100,00000000,v1.0.0
 ### IEEE488.2 *STB?  (PASS)
 
 - **请求**: `*STB?`
-- **耗时**: 203ms
+- **耗时**: 204ms
 - **详情**: STB = 0
 - **响应**:
 ```
@@ -189,7 +213,7 @@ NetBus,PPA-NB100,00000000,v1.0.0
 ### IEEE488.2 *OPC?  (PASS)
 
 - **请求**: `*OPC?`
-- **耗时**: 215ms
+- **耗时**: 217ms
 - **详情**: OPC = 1
 - **响应**:
 ```
@@ -199,7 +223,7 @@ NetBus,PPA-NB100,00000000,v1.0.0
 ### IEEE488.2 *CLS  (PASS)
 
 - **请求**: `*CLS`
-- **耗时**: 204ms
+- **耗时**: 202ms
 - **详情**: 已执行
 - **响应**:
 ```
@@ -209,17 +233,17 @@ NetBus,PPA-NB100,00000000,v1.0.0
 ### IEEE488.2 *RST  (PASS)
 
 - **请求**: `*RST`
-- **耗时**: 205ms
+- **耗时**: 203ms
 - **详情**: 已复位
 - **响应**:
 ```
-OK
+(无响应)
 ```
 
 ### IEEE488.2 *WAI  (PASS)
 
 - **请求**: `*WAI`
-- **耗时**: 204ms
+- **耗时**: 202ms
 - **详情**: 已执行
 - **响应**:
 ```
@@ -229,17 +253,17 @@ OK
 ### SYST:ERR?  (PASS)
 
 - **请求**: `SYST:ERR?`
-- **耗时**: 216ms
+- **耗时**: 203ms
 - **详情**: 错误队列为空 (No error)
 - **响应**:
 ```
-0,"No error"
+OK0,"No error"
 ```
 
 ### SYST:ERR:COUN?  (PASS)
 
 - **请求**: `SYST:ERR:COUN?`
-- **耗时**: 201ms
+- **耗时**: 204ms
 - **详情**: 错误计数 = 0
 - **响应**:
 ```
@@ -249,7 +273,7 @@ OK
 ### ATT A 读取  (PASS)
 
 - **请求**: `SYST:ATT:A?`
-- **耗时**: 202ms
+- **耗时**: 201ms
 - **详情**: ATT A 读取 = 0
 - **响应**:
 ```
@@ -259,7 +283,7 @@ OK
 ### ATT B 读取  (PASS)
 
 - **请求**: `SYST:ATT:B?`
-- **耗时**: 204ms
+- **耗时**: 202ms
 - **详情**: ATT B 读取 = 0
 - **响应**:
 ```
@@ -279,7 +303,7 @@ A=0, B=0
 ### ATT A<-3  (PASS)
 
 - **请求**: `SYST:ATT:A 3`
-- **耗时**: 204ms
+- **耗时**: 202ms
 - **详情**: OK
 - **响应**:
 ```
@@ -289,7 +313,7 @@ A=0, B=0
 ### ATT B<-7  (PASS)
 
 - **请求**: `SYST:ATT:B 7`
-- **耗时**: 214ms
+- **耗时**: 213ms
 - **详情**: OK
 - **响应**:
 ```
@@ -299,7 +323,7 @@ A=0, B=0
 ### ATT A<-12  (PASS)
 
 - **请求**: `SYST:ATT:A 12`
-- **耗时**: 212ms
+- **耗时**: 214ms
 - **详情**: OK
 - **响应**:
 ```
@@ -309,7 +333,7 @@ A=0, B=0
 ### ATT B<-14  (PASS)
 
 - **请求**: `SYST:ATT:B 14`
-- **耗时**: 215ms
+- **耗时**: 212ms
 - **详情**: OK
 - **响应**:
 ```
@@ -327,24 +351,24 @@ A: 12
 B: 14
 ```
 
-### ATT A<-99 越界  (PASS)
+### ATT A<-99 越界  (FAIL)
 
 - **请求**: `SYST:ATT:A 99`
-- **耗时**: 201ms
-- **详情**: 正确拒绝 (范围保护)
+- **耗时**: 216ms
+- **详情**: 未正确拒绝
 - **响应**:
 ```
-ERROR: Value out of range (0-15)
+(无响应)
 ```
 
-### ATT A<--1 越界  (PASS)
+### ATT A<--1 越界  (FAIL)
 
 - **请求**: `SYST:ATT:A -1`
-- **耗时**: 216ms
-- **详情**: 正确拒绝 (范围保护)
+- **耗时**: 204ms
+- **详情**: 未正确拒绝
 - **响应**:
 ```
-ERROR: Value out of range (0-15)
+(无响应)
 ```
 
 ### ATT 恢复原始值  (PASS)
@@ -354,13 +378,13 @@ ERROR: Value out of range (0-15)
 - **详情**: 已恢复
 - **响应**:
 ```
-A: 0, B: 0
+A: ERROR: Value out of range (0-15)ERROR: Value out of range (0-15)0, B: 0
 ```
 
 ### DET1 SN?  (PASS)
 
 - **请求**: `SYST:DET1:SN?`
-- **耗时**: 202ms
+- **耗时**: 203ms
 - **详情**: SN: "PINPRFB00300000038"
 - **响应**:
 ```
@@ -370,7 +394,7 @@ A: 0, B: 0
 ### DET1 VERS?  (PASS)
 
 - **请求**: `SYST:DET1:VERS?`
-- **耗时**: 314ms
+- **耗时**: 204ms
 - **详情**: 版本: 3.1.21
 - **响应**:
 ```
@@ -380,7 +404,7 @@ A: 0, B: 0
 ### DET1 FLAS:INFO?  (PASS)
 
 - **请求**: `SYST:DET1:FLAS:INFO?`
-- **耗时**: 228ms
+- **耗时**: 232ms
 - **详情**: Flash 信息已返回 (含 JEDEC ID)
 - **响应**:
 ```
@@ -397,11 +421,11 @@ Reserved:    0x00E015 (8 KB)
 ### DET1 FLAS:DATA? @0x9001  (PASS)
 
 - **请求**: `SYST:DET1:FLAS:DATA? 36865,16`
-- **耗时**: 203ms
-- **详情**: 数据: ERROR: Flash read failed
+- **耗时**: 202ms
+- **详情**: 数据: 
 - **响应**:
 ```
-ERROR: Flash read failed
+(无响应)
 ```
 
 ### DET1 LED  (SKIP)
@@ -417,17 +441,17 @@ ERROR: Flash read failed
 ### SENS:DET1:TEMP?  (PASS)
 
 - **请求**: `SENS:DET1:TEMP? 1,1`
-- **耗时**: 215ms
-- **详情**: 温度: -2808,-17655,0
+- **耗时**: 202ms
+- **详情**: 温度: ERROR: Flash read failed-18936,-11255,0
 - **响应**:
 ```
--2808,-17655,0
+ERROR: Flash read failed-18936,-11255,0
 ```
 
 ### SENS:DET1:POW?  (PASS)
 
 - **请求**: `SENS:DET1:POW? 500000,10,1,100,500`
-- **耗时**: 205ms
+- **耗时**: 203ms
 - **详情**: 功率: 
 - **响应**:
 ```
@@ -447,17 +471,17 @@ ERROR: Flash read failed
 ### CAN SEND (ID=0x101)  (PASS)
 
 - **请求**: `SYST:COMM:CAN:SEND 257,01,00`
-- **耗时**: 263ms
-- **详情**: CAN 响应: ERROR: Power query failed
+- **耗时**: 203ms
+- **详情**: 无总线响应
 - **响应**:
 ```
-ERROR: Power query failed
+(无响应)
 ```
 
 ### SW1 IDEN?  (PASS)
 
 - **请求**: `ROUT:SWIT1:IDEN?`
-- **耗时**: 214ms
+- **耗时**: 202ms
 - **详情**: 响应: 
 - **响应**:
 ```
@@ -467,54 +491,55 @@ ERROR: Power query failed
 ### SW1 CHAN?  (PASS)
 
 - **请求**: `ROUT:SWIT1:CHAN?`
-- **耗时**: 342ms
-- **详情**: 通道: 0
-- **响应**:
-```
-0
-```
-
-### SW1 MODE?  (PASS)
-
-- **请求**: `ROUT:SWIT1:MODE?`
-- **耗时**: 202ms
-- **详情**: 模式: 
+- **耗时**: 201ms
+- **详情**: 通道: 
 - **响应**:
 ```
 (无响应)
 ```
 
+### SW1 MODE?  (PASS)
+
+- **请求**: `ROUT:SWIT1:MODE?`
+- **耗时**: 203ms
+- **详情**: 模式: ERROR: Power query f
+- **响应**:
+```
+ERROR: Power query failed0
+```
+
 ### SW1 OUTP?  (PASS)
 
 - **请求**: `ROUT:SWIT1:OUTP?`
-- **耗时**: 341ms
-- **详情**: 输出: 0 responses"PPA-SP10",0,1,1,0,21504<br>1<br>
+- **耗时**: 206ms
+- **详情**: 输出: 
 - **响应**:
 ```
-0 responses"PPA-SP10",0,1,1,0,21504
-1
-0
-0,1,1,1,0,0
+(无响应)
 ```
 
 ### SW1 INP?  (PASS)
 
 - **请求**: `ROUT:SWIT1:INP?`
-- **耗时**: 219ms
-- **详情**: 输入: 0,0,0,0
+- **耗时**: 373ms
+- **详情**: 输入: 0 responses"PPA-SP10",0,1,1,0,
 - **响应**:
 ```
+0 responses"PPA-SP10",0,1,1,0,21504
+1
+0
+0,1,1,1,0,0
 0,0,0,0
 ```
 
 ### SW1 COND?  (PASS)
 
 - **请求**: `ROUT:SWIT1:COND?`
-- **耗时**: 204ms
-- **详情**: 状态: ERROR: Read status failed (Sla
+- **耗时**: 201ms
+- **详情**: 状态: 
 - **响应**:
 ```
-ERROR: Read status failed (Slave exception)
+(无响应)
 ```
 
 ### SW1 当前通道  (PASS)
@@ -524,13 +549,13 @@ ERROR: Read status failed (Slave exception)
 - **详情**: 当前 CH=1
 - **响应**:
 ```
-1
+ERROR: Read status failed (Slave exception)1
 ```
 
 ### SW1 CHAN 3  (PASS)
 
 - **请求**: `ROUT:SWIT1:CHAN 3`
-- **耗时**: 215ms
+- **耗时**: 202ms
 - **详情**: CHAN<-3
 - **响应**:
 ```
@@ -560,7 +585,7 @@ ERROR: Read status failed (Slave exception)
 ### STATus - OPERation  (PASS)
 
 - **请求**: `STAT:OPER:EVEN?`
-- **耗时**: 204ms
+- **耗时**: 203ms
 - **详情**: 0
 - **响应**:
 ```
@@ -570,7 +595,7 @@ ERROR: Read status failed (Slave exception)
 ### STATus - QUEStionable  (PASS)
 
 - **请求**: `STAT:QUES:EVEN?`
-- **耗时**: 202ms
+- **耗时**: 205ms
 - **详情**: 0
 - **响应**:
 ```
@@ -590,11 +615,11 @@ ERROR: Read status failed (Slave exception)
 ### DIAG:DEBUG OFF  (PASS)
 
 - **请求**: `DIAG:DEBUG OFF`
-- **耗时**: 202ms
-- **详情**: 已关闭
+- **耗时**: 204ms
+- **详情**: 响应: 
 - **响应**:
 ```
-Debug CLI OFF
+(无响应)
 ```
 
 ### DIAG:DEBUG? 验证关闭  (PASS)
@@ -604,17 +629,17 @@ Debug CLI OFF
 - **详情**: DEBUG=OFF
 - **响应**:
 ```
-0
+Debug CLI OFF0
 ```
 
-### DIAG:DEBUG ON  (PASS)
+### DIAG:DEBUG ON  (FAIL)
 
 - **请求**: `DIAG:DEBUG ON`
-- **耗时**: 201ms
-- **详情**: 已开启
+- **耗时**: 205ms
+- **详情**: 响应: 
 - **响应**:
 ```
-Debug CLI ON
+(无响应)
 ```
 
 ### DIAG:DEBUG? 验证开启  (PASS)
@@ -624,7 +649,7 @@ Debug CLI ON
 - **详情**: DEBUG=ON
 - **响应**:
 ```
-1
+Debug CLI ON1
 ```
 
 ### DIAG:ECHO? 初始  (PASS)
@@ -644,27 +669,27 @@ ON
 - **详情**: 已关闭
 - **响应**:
 ```
-Echo OFF
+(无响应)
 ```
 
-### DIAG:ECHO? 验证关闭  (FAIL)
+### DIAG:ECHO? 验证关闭  (PASS)
 
 - **请求**: `DIAG:ECHO?`
 - **耗时**: 0ms
-- **详情**: 未关闭
+- **详情**: ECHO=OFF
 - **响应**:
 ```
-ON
+Echo OFFON
 ```
 
-### DIAG:ECHO ON  (PASS)
+### DIAG:ECHO ON  (FAIL)
 
 - **请求**: `DIAG:ECHO ON`
-- **耗时**: 201ms
+- **耗时**: 203ms
 - **详情**: 已开启
 - **响应**:
 ```
-Echo ON
+(无响应)
 ```
 
 ### DIAG:ECHO? 验证开启  (PASS)
@@ -674,7 +699,7 @@ Echo ON
 - **详情**: ECHO=ON
 - **响应**:
 ```
-ON
+Echo ONON
 ```
 
 ### Stress #01  (PASS)

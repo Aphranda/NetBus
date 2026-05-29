@@ -19,14 +19,31 @@
 
 static int tcp_fd    = -1;   /* listening socket */
 static int client_fd = -1;   /* active client (only one) */
+static size_t tx_out_pos = 0U; /* line-buffer write position */
 
-/* ── Write to TCP client ────────────────────────────────────────── */
+/* ── Write to TCP client (line-buffered) ──────────────────────── */
 
 size_t NetSCPI_Write(const char *data, size_t len)
 {
     if (client_fd < 0) return 0;
-    int sent = lwip_send(client_fd, data, len, 0);
-    return (sent > 0) ? (size_t)sent : 0;
+
+    static char out_buf[SCPI_INPUT_BUFFER_LENGTH];
+
+    for (size_t i = 0U; i < len; i++)
+    {
+        char c = data[i];
+        if (tx_out_pos < sizeof(out_buf) - 1U)
+        {
+            out_buf[tx_out_pos++] = c;
+        }
+        if (c == '\n' || tx_out_pos >= sizeof(out_buf) - 1U)
+        {
+            lwip_send(client_fd, out_buf, tx_out_pos, 0);
+            tx_out_pos = 0U;
+        }
+    }
+
+    return len;
 }
 
 int NetSCPI_IsConnected(void)
@@ -49,6 +66,7 @@ static void NetSCPI_ProcessClient(void)
         lwip_close(client_fd);
         client_fd = -1;
         line_pos = 0;
+        tx_out_pos = 0U;
         return;
     }
     buf[n] = '\0';
