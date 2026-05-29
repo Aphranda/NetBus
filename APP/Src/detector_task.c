@@ -48,6 +48,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 
+static int16_t g_det_h_power_dbm100 = 0;   /* Cached H-channel power * 100 */
+static int16_t g_det_v_power_dbm100 = 0;   /* Cached V-channel power * 100 */
+static uint8_t  g_det_data_valid = 0;      /* 1 if cache has real data      */
+
 /* Private function prototypes -----------------------------------------------*/
 
 static App_Status_t _detector_task_init(void);
@@ -712,9 +716,29 @@ Detector_Status_t Detector_QueryPower(uint8_t node_id, uint32_t freq_khz,
         result->v_power_dbm100 = (int16_t)((uint16_t)rx[4] | ((uint16_t)rx[5] << 8));
         result->mode           = rx[6];
         result->state          = rx[7];
+
+        /* Cache for non-blocking web readout */
+        g_det_h_power_dbm100 = result->h_power_dbm100;
+        g_det_v_power_dbm100 = result->v_power_dbm100;
+        g_det_data_valid = 1;
     }
 
     return DETECTOR_OK;
+}
+
+int16_t Detector_GetLastHPower(void)
+{
+    return g_det_h_power_dbm100;
+}
+
+int16_t Detector_GetLastVPower(void)
+{
+    return g_det_v_power_dbm100;
+}
+
+uint8_t Detector_IsDataValid(void)
+{
+    return g_det_data_valid;
 }
 
 /**

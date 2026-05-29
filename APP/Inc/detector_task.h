@@ -371,6 +371,14 @@ Detector_Status_t Detector_OTAComplete(uint8_t node_id, uint8_t reboot,
 /** @brief Convert Detector_Status_t to a human-readable string */
 const char *Detector_StatusString(Detector_Status_t status);
 
+/**
+  * @brief  Get last known detector power reading (non-blocking, cached).
+  * @retval Power in dBm * 100 (e.g., -1500 = -15.00 dBm), or 0 if no reading.
+  */
+int16_t Detector_GetLastHPower(void);
+int16_t Detector_GetLastVPower(void);
+uint8_t Detector_IsDataValid(void);
+
 #ifdef __cplusplus
 }
 #endif

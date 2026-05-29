@@ -5,8 +5,7 @@
  * HTTPD_USE_CUSTOM_FSDATA = 1). It defines FS_ROOT as the head of a
  * linked list of static file entries.
  *
- * SSI tags (Phase 1): <!--#uptime--> <!--#version--> <!--#bldate-->
- *   <!--#sysst--> <!--#heap--> <!--#heapmin--> <!--#tasks-->
+ * SSI tags: <!--#uptime--> <!--#version--> <!--#sysst--> <!--#heap-->
  *   <!--#ip--> <!--#mask--> <!--#gw--> <!--#mac--> <!--#link-->
  *   <!--#storfr--> <!--#storpct--> <!--#storwr--> <!--#storrec-->
  *   <!--#modst-->
@@ -51,7 +50,23 @@
     ".nav a:hover,.nav a.on{background:#1a3a50;color:#90c0e0}\r\n" \
     ".footer{text-align:center;color:#405060;font-size:.75rem;margin-top:1rem}\r\n" \
     ".muted{color:#506070;font-size:.8rem}\r\n" \
-    "a{color:#60b0e0}"
+    "a{color:#60b0e0}\r\n" \
+    ".main{display:flex;gap:1rem;width:100%;max-width:1100px;align-items:flex-start}\r\n" \
+    ".left{flex:1;min-width:0}\r\n" \
+    ".right{width:380px;flex-shrink:0;position:sticky;top:1rem}\r\n" \
+    ".right .card{padding:1rem}\r\n" \
+    "textarea{width:100%;background:#0a1018;color:#90c0d0;border:1px solid #253545;" \
+      "border-radius:6px;padding:.5rem;font-family:Consolas,monospace;font-size:.78rem;" \
+      "resize:vertical;height:200px}\r\n" \
+    ".scpi-form{display:flex;gap:.4rem}\r\n" \
+    ".scpi-form input{flex:1;padding:.4rem .5rem;background:#0a1018;border:1px solid #253545;" \
+      "border-radius:6px;color:#d0e0f0;font-family:Consolas,monospace;font-size:.82rem}\r\n" \
+    ".scpi-form button{padding:.4rem .8rem;background:#205080;color:#d0e0f0;border:none;" \
+      "border-radius:6px;cursor:pointer;font-size:.82rem;white-space:nowrap}\r\n" \
+    ".scpi-form button:hover{background:#2868a0}\r\n" \
+    "pre.result{background:#0a1018;color:#90c0d0;padding:.6rem;border-radius:6px;" \
+      "border:1px solid #253545;font-family:Consolas,monospace;font-size:.78rem;" \
+      "white-space:pre-wrap;word-break:break-all;max-height:150px;overflow:auto}"
 
 /* ── /index.html (Dashboard) ──────────────────────────────────────────────── */
 
@@ -61,13 +76,14 @@ static const unsigned char data_index_html[] =
     "<head>\r\n"
     "<meta charset=\"UTF-8\">\r\n"
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n"
-    "<meta http-equiv=\"refresh\" content=\"10\">\r\n"
     "<title>NetBus Dashboard</title>\r\n"
     "<style>\r\n"
     WEB_CSS
     "</style>\r\n"
     "</head>\r\n"
     "<body>\r\n"
+    "<div class=\"main\">\r\n"
+    "<div class=\"left\">\r\n"
     "<div class=\"card\">\r\n"
     "  <h1>NetBus</h1>\r\n"
     "  <span class=\"tag\">STM32H743ZI</span>\r\n"
@@ -76,7 +92,6 @@ static const unsigned char data_index_html[] =
     "  <span class=\"tag\">v<!--#version--></span>\r\n"
     "  <div class=\"nav\">\r\n"
     "    <a href=\"/index.html\" class=\"on\">Dashboard</a>\r\n"
-    "    <a href=\"/tasks.html\">Tasks</a>\r\n"
     "    <a href=\"/netcfg.html\">Network</a>\r\n"
     "  </div>\r\n"
     "</div>\r\n"
@@ -85,9 +100,8 @@ static const unsigned char data_index_html[] =
     "  <table>\r\n"
     "    <tr><td class=\"k\">Status</td><td class=\"v\"><!--#sysst--></td></tr>\r\n"
     "    <tr><td class=\"k\">Firmware</td><td class=\"v\">v<!--#version--></td></tr>\r\n"
-    "    <tr><td class=\"k\">Build</td><td class=\"v\"><!--#bldate--></td></tr>\r\n"
     "    <tr><td class=\"k\">Uptime</td><td class=\"v\"><!--#uptime--></td></tr>\r\n"
-    "    <tr><td class=\"k\">Free Heap</td><td class=\"v\"><!--#heap--> B (min <!--#heapmin--> B)</td></tr>\r\n"
+    "    <tr><td class=\"k\">Free Heap</td><td class=\"v\"><!--#heap--> B</td></tr>\r\n"
     "  </table>\r\n"
     "</div>\r\n"
     "<div class=\"card\">\r\n"
@@ -110,20 +124,33 @@ static const unsigned char data_index_html[] =
     "  </table>\r\n"
     "</div>\r\n"
     "<div class=\"card\">\r\n"
-    "  <h2>Task Summary</h2>\r\n"
+    "  <h2>RF Parameters</h2>\r\n"
     "  <table>\r\n"
-    "    <tr><th>Name</th><th>S</th><th>Pri</th><th>Stack</th></tr>\r\n"
-    "    <!--#tasks-->\r\n"
+    "    <tr><td class=\"k\">Attenuator A</td><td class=\"v\"><!--#att1--></td></tr>\r\n"
+    "    <tr><td class=\"k\">Attenuator B</td><td class=\"v\"><!--#att2--></td></tr>\r\n"
+    "    <tr><td class=\"k\">RF Switch 1</td><td class=\"v\"><!--#rfsw1--></td></tr>\r\n"
+    "    <tr><td class=\"k\">RF Switch 2</td><td class=\"v\"><!--#rfsw2--></td></tr>\r\n"
+    "    <tr><td class=\"k\">Power H</td><td class=\"v\"><!--#det_h--></td></tr>\r\n"
+    "    <tr><td class=\"k\">Power V</td><td class=\"v\"><!--#det_v--></td></tr>\r\n"
     "  </table>\r\n"
+    "</div>\r\n"
+    "</div>\r\n"
+    "<div class=\"right\">\r\n"
+    "<div class=\"card\">\r\n"
+    "  <h2>SCPI Console</h2>\r\n"
+    "  <form class=\"scpi-form\" action=\"/scpi.cgi\" method=\"GET\">\r\n"
+    "    <input name=\"cmd\" placeholder=\"*IDN?\" autocomplete=\"off\">\r\n"
+    "    <button type=\"submit\">Send</button>\r\n"
+    "  </form>\r\n"
     "</div>\r\n"
     "<div class=\"card\">\r\n"
-    "  <h2>Module Status</h2>\r\n"
-    "  <table>\r\n"
-    "    <tr><th>Module</th><th>State</th></tr>\r\n"
-    "    <!--#modst-->\r\n"
-    "  </table>\r\n"
+    "  <h2>System Log</h2>\r\n"
+    "  <textarea readonly><!--#log--></textarea>\r\n"
     "</div>\r\n"
-    "<div class=\"footer\">NetBus &mdash; auto-refresh 10s</div>\r\n"
+    "</div>\r\n"
+    "</div>\r\n"
+    "<div class=\"footer\">NetBus</div>\r\n"
+    "<div class=\"footer\">NetBus</div>\r\n"
     "</body>\r\n"
     "</html>\r\n";
 
@@ -142,56 +169,6 @@ static const struct fsdata_file file_index_shtml = {
     (const unsigned char *)"/index.shtml",
     data_index_html,
     sizeof(data_index_html),
-    0
-};
-
-/* ── /tasks.html ──────────────────────────────────────────────────────────── */
-
-static const unsigned char data_tasks_html[] =
-    "<!DOCTYPE html>\r\n"
-    "<html lang=\"en\">\r\n"
-    "<head>\r\n"
-    "<meta charset=\"UTF-8\">\r\n"
-    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n"
-    "<meta http-equiv=\"refresh\" content=\"5\">\r\n"
-    "<title>NetBus — Tasks</title>\r\n"
-    "<style>\r\n"
-    WEB_CSS
-    "</style>\r\n"
-    "</head>\r\n"
-    "<body>\r\n"
-    "<div class=\"card\">\r\n"
-    "  <h1>Task List</h1>\r\n"
-    "  <div class=\"nav\">\r\n"
-    "    <a href=\"/index.html\">Dashboard</a>\r\n"
-    "    <a href=\"/tasks.html\" class=\"on\">Tasks</a>\r\n"
-    "  </div>\r\n"
-    "</div>\r\n"
-    "<div class=\"card\">\r\n"
-    "  <h2>FreeRTOS Tasks</h2>\r\n"
-    "  <table>\r\n"
-    "    <tr><th>Name</th><th>S</th><th>Pri</th><th>Stack Free</th></tr>\r\n"
-    "    <!--#tasks-->\r\n"
-    "  </table>\r\n"
-    "  <p class=\"muted\">S: R=Running Y=Ready B=Blocked S=Suspended | Pri=priority | Stack Free in words</p>\r\n"
-    "</div>\r\n"
-    "<div class=\"card\">\r\n"
-    "  <h2>Memory</h2>\r\n"
-    "  <table>\r\n"
-    "    <tr><td class=\"k\">Free Heap</td><td class=\"v\"><!--#heap--> B</td></tr>\r\n"
-    "    <tr><td class=\"k\">Min Free Ever</td><td class=\"v\"><!--#heapmin--> B</td></tr>\r\n"
-    "    <tr><td class=\"k\">Uptime</td><td class=\"v\"><!--#uptime--></td></tr>\r\n"
-    "  </table>\r\n"
-    "</div>\r\n"
-    "<div class=\"footer\">NetBus &mdash; auto-refresh 5s</div>\r\n"
-    "</body>\r\n"
-    "</html>\r\n";
-
-static const struct fsdata_file file_tasks_html = {
-    &file_index_shtml,
-    (const unsigned char *)"/tasks.html",
-    data_tasks_html,
-    sizeof(data_tasks_html),
     0
 };
 
@@ -223,7 +200,6 @@ static const unsigned char data_netcfg_html[] =
     "  <h1>Network Configuration</h1>\r\n"
     "  <div class=\"nav\">\r\n"
     "    <a href=\"/index.html\">Dashboard</a>\r\n"
-    "    <a href=\"/tasks.html\">Tasks</a>\r\n"
     "    <a href=\"/netcfg.html\" class=\"on\">Network</a>\r\n"
     "  </div>\r\n"
     "</div>\r\n"
@@ -255,7 +231,7 @@ static const unsigned char data_netcfg_html[] =
     "</html>\r\n";
 
 static const struct fsdata_file file_netcfg_html = {
-    &file_tasks_html,
+    &file_index_shtml,
     (const unsigned char *)"/netcfg.html",
     data_netcfg_html,
     sizeof(data_netcfg_html),

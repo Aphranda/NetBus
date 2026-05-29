@@ -91,6 +91,13 @@ static Log_Config_t g_log_config = {
 static Log_DbgCmdEntry_t g_dbg_cmds[LOG_DBG_MAX_CMDS];
 static uint8_t           g_dbg_cmd_count = 0U;
 
+static Log_WebHook_t g_web_hook = NULL;
+
+void Log_SetWebHook(Log_WebHook_t hook)
+{
+    g_web_hook = hook;
+}
+
 /**
   * @brief Debug CLI state
   */
@@ -252,6 +259,8 @@ void Log_Print(uint8_t level, const char *fmt, ...)
     if (g_uart_tx_mutex != NULL) osMutexAcquire(g_uart_tx_mutex, osWaitForever);
     HAL_UART_Transmit(g_log_config.huart, (uint8_t *)buffer, (uint16_t)pos, g_log_config.timeout);
     if (g_uart_tx_mutex != NULL) osMutexRelease(g_uart_tx_mutex);
+
+    if (g_web_hook != NULL) g_web_hook(buffer, pos);
 }
 
 /**
@@ -265,6 +274,8 @@ void Log_WriteRaw(const char *data, size_t len)
     if (g_uart_tx_mutex != NULL) osMutexAcquire(g_uart_tx_mutex, osWaitForever);
     HAL_UART_Transmit(g_log_config.huart, (uint8_t *)data, (uint16_t)len, g_log_config.timeout);
     if (g_uart_tx_mutex != NULL) osMutexRelease(g_uart_tx_mutex);
+
+    if (g_web_hook != NULL) g_web_hook(data, len);
 }
 
 /**

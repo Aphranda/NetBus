@@ -242,6 +242,9 @@ void Log_Print(uint8_t level, const char *fmt, ...);
   */
 void Log_WriteRaw(const char *data, size_t len);
 
+typedef void (*Log_WebHook_t)(const char *data, size_t len);
+void Log_SetWebHook(Log_WebHook_t hook);
+
 /**
   * @brief  Flush pending log data (waits for UART TX to complete)
   * @note   Currently a no-op since HAL_UART_Transmit is blocking.

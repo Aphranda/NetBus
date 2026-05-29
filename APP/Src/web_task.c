@@ -23,6 +23,10 @@
 #include "stm32h7xx_hal.h"
 #include "log.h"
 #include "storage_task.h"
+#include "rfsw_task.h"
+#include "detector_task.h"
+#include "io.h"
+#include "scpi_queue.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -42,11 +46,8 @@ extern struct netif gnetif;       /* from lwip.c */
 enum {
     SSI_TAG_UPTIME = 0,
     SSI_TAG_VERSION,
-    SSI_TAG_BLDATE,
     SSI_TAG_SYSST,
     SSI_TAG_HEAP,
-    SSI_TAG_HEAPMIN,
-    SSI_TAG_TASKS,
     SSI_TAG_IP,
     SSI_TAG_MASK,
     SSI_TAG_GW,
@@ -56,18 +57,21 @@ enum {
     SSI_TAG_STORPCT,
     SSI_TAG_STORWR,
     SSI_TAG_STORREC,
-    SSI_TAG_MODST,
+    SSI_TAG_ATT1,
+    SSI_TAG_ATT2,
+    SSI_TAG_RFSW1,
+    SSI_TAG_RFSW2,
+    SSI_TAG_DET_H,
+    SSI_TAG_DET_V,
+    SSI_TAG_LOG,
     SSI_TAG_COUNT
 };
 
 static const char *g_ssi_tags[] = {
     "uptime",       /* SSI_TAG_UPTIME   */
     "version",      /* SSI_TAG_VERSION  */
-    "bldate",       /* SSI_TAG_BLDATE   */
     "sysst",        /* SSI_TAG_SYSST    */
     "heap",         /* SSI_TAG_HEAP     */
-    "heapmin",      /* SSI_TAG_HEAPMIN  */
-    "tasks",        /* SSI_TAG_TASKS    */
     "ip",           /* SSI_TAG_IP       */
     "mask",         /* SSI_TAG_MASK     */
     "gw",           /* SSI_TAG_GW       */
@@ -77,7 +81,13 @@ static const char *g_ssi_tags[] = {
     "storpct",      /* SSI_TAG_STORPCT  */
     "storwr",       /* SSI_TAG_STORWR   */
     "storrec",      /* SSI_TAG_STORREC  */
-    "modst",        /* SSI_TAG_MODST    */
+    "att1",         /* SSI_TAG_ATT1     */
+    "att2",         /* SSI_TAG_ATT2     */
+    "rfsw1",        /* SSI_TAG_RFSW1    */
+    "rfsw2",        /* SSI_TAG_RFSW2    */
+    "det_h",        /* SSI_TAG_DET_H    */
+    "det_v",        /* SSI_TAG_DET_V    */
+    "log",          /* SSI_TAG_LOG      */
 };
 
 /* ── System info helpers ──────────────────────────────────────────────────── */
@@ -139,54 +149,11 @@ static int fmt_mac(const uint8_t *mac, char *buf, int len)
                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
-/**
-  * @brief  Build HTML table rows for all FreeRTOS tasks.
-  *
-  * Each row: <tr><td>name</td><td>state</td><td>pri</td><td>stack free</td></tr>
-  */
-static int fmt_task_table(char *buf, int len)
-{
-    TaskStatus_t *tasks;
-    UBaseType_t count, i;
-    int pos = 0;
+/* ── Log ring buffer + SCPI capture (used by SSI handler) ───────────────── */
 
-    count = uxTaskGetNumberOfTasks();
-    if (count == 0) {
-        return snprintf(buf, len, "<tr><td colspan=\"4\">No tasks</td></tr>");
-    }
-
-    tasks = pvPortMalloc(count * sizeof(TaskStatus_t));
-    if (tasks == NULL) {
-        return snprintf(buf, len, "<tr><td colspan=\"4\">(alloc failed)</td></tr>");
-    }
-
-    count = uxTaskGetSystemState(tasks, count, NULL);
-
-    for (i = 0; i < count && pos < (len - 80); i++) {
-        /* Stack high-water mark: how many words are still free (lowest ever) */
-        UBaseType_t stackFree = uxTaskGetStackHighWaterMark(tasks[i].xHandle);
-
-        /* Task state as 1-char abbreviation */
-        char state;
-        switch (tasks[i].eCurrentState) {
-        case eRunning:   state = 'R'; break;
-        case eReady:     state = 'Y'; break;
-        case eBlocked:   state = 'B'; break;
-        case eSuspended: state = 'S'; break;
-        case eDeleted:   state = 'D'; break;
-        default:         state = '?'; break;
-        }
-
-        pos += snprintf(buf + pos, len - pos,
-                        "<tr><td>%s</td><td>%c</td><td>%lu</td><td>%lu</td></tr>",
-                        tasks[i].pcTaskName, state,
-                        (unsigned long)tasks[i].uxCurrentPriority,
-                        (unsigned long)stackFree);
-    }
-
-    vPortFree(tasks);
-    return pos;
-}
+#define WEB_LOG_BUF_SIZE  2048
+static char g_web_log_buf[WEB_LOG_BUF_SIZE];
+static int  g_web_log_pos = 0;
 
 /* ── SSI handler ──────────────────────────────────────────────────────────── */
 
@@ -211,9 +178,6 @@ static u16_t Web_SSIHandler(int iIndex, char *pcInsert, int iInsertLen)
     case SSI_TAG_VERSION:
         return (u16_t)snprintf(pcInsert, iInsertLen, FW_VERSION);
 
-    case SSI_TAG_BLDATE:
-        return (u16_t)snprintf(pcInsert, iInsertLen, FW_BUILD_DATE);
-
     case SSI_TAG_SYSST:
         return (u16_t)snprintf(pcInsert, iInsertLen,
                                "<span class=\"led %s\"></span>%s",
@@ -222,13 +186,6 @@ static u16_t Web_SSIHandler(int iIndex, char *pcInsert, int iInsertLen)
     case SSI_TAG_HEAP:
         return (u16_t)snprintf(pcInsert, iInsertLen, "%u",
                                (unsigned)xPortGetFreeHeapSize());
-
-    case SSI_TAG_HEAPMIN:
-        return (u16_t)snprintf(pcInsert, iInsertLen, "%u",
-                               (unsigned)xPortGetMinimumEverFreeHeapSize());
-
-    case SSI_TAG_TASKS:
-        return (u16_t)fmt_task_table(pcInsert, iInsertLen);
 
     case SSI_TAG_IP:
         return (u16_t)fmt_ip4(netif_ip4_addr(&gnetif), pcInsert, iInsertLen);
@@ -268,18 +225,55 @@ static u16_t Web_SSIHandler(int iIndex, char *pcInsert, int iInsertLen)
         return (u16_t)snprintf(pcInsert, iInsertLen, "%lu",
                                (unsigned long)Storage_GetRecordCount());
 
-    case SSI_TAG_MODST:
-        return (u16_t)snprintf(pcInsert, iInsertLen,
-                               "<tr><td>Log</td><td><span class=\"led green\"></span></td></tr>"
-                               "<tr><td>CAN</td><td><span class=\"led green\"></span></td></tr>"
-                               "<tr><td>Modbus</td><td><span class=\"led green\"></span></td></tr>"
-                               "<tr><td>Storage</td><td><span class=\"led green\"></span></td></tr>"
-                               "<tr><td>Attenuator</td><td><span class=\"led green\"></span></td></tr>"
-                               "<tr><td>RFSW</td><td><span class=\"led green\"></span></td></tr>"
-                               "<tr><td>Detector</td><td><span class=\"led green\"></span></td></tr>"
-                               "<tr><td>Web</td><td><span class=\"led green\"></span></td></tr>"
-                               "<tr><td>System</td><td><span class=\"led %s\"></span>%s</td></tr>",
-                               sys_state_css(), sys_state_label());
+    case SSI_TAG_ATT1:
+        return (u16_t)snprintf(pcInsert, iInsertLen, "%u", IO_GetAttenuatorA());
+
+    case SSI_TAG_ATT2:
+        return (u16_t)snprintf(pcInsert, iInsertLen, "%u", IO_GetAttenuatorB());
+
+    case SSI_TAG_RFSW1: {
+        uint8_t ch = RFSW_GetChannel(1U);
+        if (ch >= 1 && ch <= 10) return (u16_t)snprintf(pcInsert, iInsertLen, "%u", ch);
+        return (u16_t)snprintf(pcInsert, iInsertLen, "?");
+    }
+    case SSI_TAG_RFSW2: {
+        uint8_t ch = RFSW_GetChannel(2U);
+        if (ch >= 1 && ch <= 10) return (u16_t)snprintf(pcInsert, iInsertLen, "%u", ch);
+        return (u16_t)snprintf(pcInsert, iInsertLen, "?");
+    }
+
+    case SSI_TAG_DET_H: {
+        if (Detector_IsDataValid()) {
+            int16_t val = Detector_GetLastHPower();
+            return (u16_t)snprintf(pcInsert, iInsertLen, "%.2f dBm", val / 100.0);
+        }
+        return (u16_t)snprintf(pcInsert, iInsertLen, "---");
+    }
+
+    case SSI_TAG_DET_V: {
+        if (Detector_IsDataValid()) {
+            int16_t val = Detector_GetLastVPower();
+            return (u16_t)snprintf(pcInsert, iInsertLen, "%.2f dBm", val / 100.0);
+        }
+        return (u16_t)snprintf(pcInsert, iInsertLen, "---");
+    }
+
+    case SSI_TAG_LOG: {
+        int n = 0;
+        int end = g_web_log_pos;
+        int start = (end + 1) % WEB_LOG_BUF_SIZE;
+        for (int i = 0; i < WEB_LOG_BUF_SIZE - 1 && n < iInsertLen - 1; i++) {
+            int idx = (start + i) % WEB_LOG_BUF_SIZE;
+            char c = g_web_log_buf[idx];
+            if (c == '\0') break;
+            if (c == '<')      { pcInsert[n++] = '&'; pcInsert[n++] = 'l'; pcInsert[n++] = 't'; pcInsert[n++] = ';'; }
+            else if (c == '>') { pcInsert[n++] = '&'; pcInsert[n++] = 'g'; pcInsert[n++] = 't'; pcInsert[n++] = ';'; }
+            else if (c == '&') { pcInsert[n++] = '&'; pcInsert[n++] = 'a'; pcInsert[n++] = 'm'; pcInsert[n++] = 'p'; pcInsert[n++] = ';'; }
+            else pcInsert[n++] = c;
+        }
+        if (n == 0) pcInsert[n++] = '-';
+        return (u16_t)n;
+    }
 
     default:
         return 0;
@@ -292,6 +286,7 @@ static u16_t Web_SSIHandler(int iIndex, char *pcInsert, int iInsertLen)
 enum {
     CGI_NETCFG = 0,
     CGI_REBOOT,
+    CGI_SCPI,
     CGI_COUNT
 };
 
@@ -405,28 +400,82 @@ static const char *Web_RebootCGI(int iIndex, int iNumParams,
     return "/index.html";   /* unreachable */
 }
 
+static void Web_LogWrite(const char *data, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        char c = data[i];
+        if (c == '\r') continue;           /* skip CR, keep LF */
+        g_web_log_buf[g_web_log_pos] = c;
+        g_web_log_pos = (g_web_log_pos + 1) % WEB_LOG_BUF_SIZE;
+    }
+    g_web_log_buf[g_web_log_pos] = '\0';
+}
+
+/* ── SCPI CGI: enqueue command into existing SCPI task pipeline ──────────── */
+
+/**
+  * @brief  CGI: /scpi.cgi?cmd=... — enqueue SCPI command, return to dashboard.
+  *         Command is processed asynchronously by SCPI task; output appears
+  *         in the system log (right panel via Log_WebHook).
+  */
+static const char *Web_SCPI_CGI(int iIndex, int iNumParams,
+                                 char *pcParam[], char *pcValue[])
+{
+    (void)iIndex;
+    const char *cmd = cgi_param("cmd", iNumParams, pcParam, pcValue);
+    if (cmd == NULL || strlen(cmd) == 0) return "/index.html";
+
+    /* URL-decode %XX escapes */
+    char decoded[128];
+    int di = 0;
+    for (const char *s = cmd; *s && di < (int)sizeof(decoded) - 1; s++) {
+        if (*s == '%' && s[1] && s[2]) {
+            char hex[3] = { s[1], s[2], '\0' };
+            decoded[di++] = (char)strtol(hex, NULL, 16);
+            s += 2;
+        } else if (*s == '+') {
+            decoded[di++] = ' ';
+        } else {
+            decoded[di++] = *s;
+        }
+    }
+    decoded[di] = '\0';
+
+    /* Append \r\n terminator */
+    if (di < (int)sizeof(decoded) - 3) {
+        decoded[di++] = '\r';
+        decoded[di++] = '\n';
+        decoded[di] = '\0';
+    }
+
+    SCPI_EnqueueLine(decoded);
+    LOG_INFO("Web: SCPI enqueued: %s", decoded);
+    return "/index.html";
+}
+
 static const tCGI g_webCGIs[] = {
-    { "/netcfg.cgi", Web_NetConfigCGI },
-    { "/reboot.cgi", Web_RebootCGI },
+    { "/netcfg.cgi",  Web_NetConfigCGI },
+    { "/reboot.cgi",  Web_RebootCGI },
+    { "/scpi.cgi",    Web_SCPI_CGI },
 };
 
 /* ── Module interface ─────────────────────────────────────────────────────── */
 
 static App_Status_t _web_task_init(void)
 {
-    /* Register SSI handler + tag table with LWIP HTTPD */
     http_set_ssi_handler(Web_SSIHandler, g_ssi_tags, SSI_TAG_COUNT);
     LOG_INFO("Web: SSI handler registered (%d tags)", (int)SSI_TAG_COUNT);
 
-    /* Register CGI handlers */
     http_set_cgi_handlers(g_webCGIs, CGI_COUNT);
     LOG_INFO("Web: CGI handlers registered (%d URIs)", (int)CGI_COUNT);
+
+    Log_SetWebHook(Web_LogWrite);
     return APP_OK;
 }
 
 static App_Status_t _web_task_process(void)
 {
-    /* No periodic work — SSI handler does everything on-demand */
+    /* No polling — all values read on-demand in SSI handler (page refresh). */
     return APP_OK;
 }
 

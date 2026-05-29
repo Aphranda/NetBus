@@ -112,6 +112,8 @@
 /*----- HTTPD CGI enabled for form handling -----*/
 #define LWIP_HTTPD_CGI 1
 #define LWIP_HTTPD_MAX_CGI_PARAMETERS 12
+/*----- HTTPD performance: limit concurrent connections -----*/
+#define LWIP_HTTPD_KILL_OLD_ON_CONNECTIONS_EXCEEDED 1
 /*----- Value in opt.h for LWIP_STATS: 1 -----*/
 #define LWIP_STATS 0
 /*----- Value in opt.h for CHECKSUM_GEN_IP: 1 -----*/

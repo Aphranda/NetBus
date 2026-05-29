@@ -95,6 +95,20 @@ extern const App_Module_t g_rfsw_task_module;
 
 /* Exported functions --------------------------------------------------------*/
 
+/**
+  * @brief  Get cached RF switch channel (non-blocking).
+  * @param  addr  Modbus slave address (1-4)
+  * @retval Channel 1-10, or 0 if not yet read.
+  */
+uint8_t RFSW_GetChannel(uint8_t addr);
+
+/**
+  * @brief  Actively read RF switch channel over Modbus (blocking, ~20ms).
+  * @param  addr  Modbus slave address (typically 1)
+  * @retval Channel 1-10 on success, 0 on failure.
+  */
+uint8_t RFSW_ReadChannel(uint8_t addr);
+
 #ifdef __cplusplus
 }
 #endif

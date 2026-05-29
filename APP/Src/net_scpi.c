@@ -39,7 +39,7 @@ size_t NetSCPI_Write(const char *data, size_t len)
         }
         if (c == '\n' || tx_out_pos >= sizeof(out_buf) - 1U)
         {
-            lwip_send(client_fd, out_buf, tx_out_pos, 0);
+            lwip_send(client_fd, out_buf, tx_out_pos, MSG_DONTWAIT);
             tx_out_pos = 0U;
         }
     }

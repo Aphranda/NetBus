@@ -68,6 +68,8 @@
   */
 static uint8_t g_rs485_rx_buf[RS485_PRINT_MAX];
 
+static uint8_t g_rfsw_cached_channel[5] = {0}; /* Channels for addrs 1-4 */
+
 /* Private function prototypes -----------------------------------------------*/
 
 static App_Status_t _rfsw_task_init(void);
@@ -199,8 +201,25 @@ static Modbus_Result_t _rfsw_read_channel(uint8_t addr, uint8_t *channel)
     if (res.status == MODBUS_OK)
     {
         *channel = (uint8_t)(reg_val & 0xFFU);
+        g_rfsw_cached_channel[(addr <= 4U) ? addr : 0U] = *channel;
     }
     return res;
+}
+
+uint8_t RFSW_GetChannel(uint8_t addr)
+{
+    if (addr >= 1U && addr <= 4U) return g_rfsw_cached_channel[addr];
+    return 0U;
+}
+
+uint8_t RFSW_ReadChannel(uint8_t addr)
+{
+    uint8_t channel = 0U;
+    Modbus_Result_t res = _rfsw_read_channel(addr, &channel);
+    if (res.status == MODBUS_OK && channel >= 1U && channel <= 10U) {
+        return channel;
+    }
+    return 0U;
 }
 
 /**
