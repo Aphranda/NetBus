@@ -60,12 +60,19 @@ osThreadId_t ETH_TaskHandle;
 const osThreadAttr_t ETH_Task_attributes = {
   .name = "ETH_Task",
   .stack_size = 1024 * 4,
-  .priority = (osPriority_t) osPriorityLow,
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for Modbus_Task */
 osThreadId_t Modbus_TaskHandle;
 const osThreadAttr_t Modbus_Task_attributes = {
   .name = "Modbus_Task",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for Can_Task */
+osThreadId_t Can_TaskHandle;
+const osThreadAttr_t Can_Task_attributes = {
+  .name = "Can_Task",
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
@@ -88,6 +95,7 @@ const osMutexAttr_t Modbus_Mutex_attributes = {
 void StartDefaultTask(void *argument);
 void StartETHTask(void *argument);
 void StartModbusTask(void *argument);
+void StartCanTask(void *argument);
 
 extern void MX_LWIP_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -133,6 +141,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of Modbus_Task */
   Modbus_TaskHandle = osThreadNew(StartModbusTask, NULL, &Modbus_Task_attributes);
+
+  /* creation of Can_Task */
+  Can_TaskHandle = osThreadNew(StartCanTask, NULL, &Can_Task_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -198,6 +209,24 @@ __weak void StartModbusTask(void *argument)
     osDelay(1);
   }
   /* USER CODE END StartModbusTask */
+}
+
+/* USER CODE BEGIN Header_StartCanTask */
+/**
+* @brief Function implementing the Can_Task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartCanTask */
+__weak void StartCanTask(void *argument)
+{
+  /* USER CODE BEGIN StartCanTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartCanTask */
 }
 
 /* Private application code --------------------------------------------------*/
