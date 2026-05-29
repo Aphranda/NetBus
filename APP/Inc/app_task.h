@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    app_task.h
-  * @brief   Application task manager — pure orchestration framework
+  * @brief   Application task manager -- pure orchestration framework
   *
   *          Responsibilities:
   *            - Provide module registration framework (App_Module_t)
@@ -105,7 +105,7 @@ App_Status_t App_Task_Init(void);
 App_Status_t App_Init(void);
 
 /**
-  * @brief  Main application loop — calls process() on all registered modules
+  * @brief  Main application loop -- calls process() on all registered modules
   * @note   Call inside while(1) in main(). Never returns.
   *         Modules are processed round-robin in registration order.
   */

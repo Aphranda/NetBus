@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    can.c
-  * @brief   CAN driver implementation — FDCAN1, CAN FD mode
+  * @brief   CAN driver implementation -- FDCAN1, CAN FD mode
   *
   *          Architecture (follows RS485 module pattern):
   *
@@ -218,7 +218,7 @@ void HAL_FDCAN_TxFifoQueueCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t TxFifoQ
 /**
   * @brief  FDCAN error/status callback
   * @note   Overrides the weak HAL_FDCAN_ErrorCallback().
-  *         Reports error status — can be extended for custom error handling.
+  *         Reports error status -- can be extended for custom error handling.
   * @param  hfdcan  FDCAN handle
   */
 void HAL_FDCAN_ErrorCallback(FDCAN_HandleTypeDef *hfdcan)
@@ -235,7 +235,7 @@ void HAL_FDCAN_ErrorCallback(FDCAN_HandleTypeDef *hfdcan)
   *
   *         Steps:
   *           1. Store FDCAN1 handle
-  *           2. Configure global filter — accept all (standard & extended)
+  *           2. Configure global filter -- accept all (standard & extended)
   *              non-matching frames into Rx FIFO 0
   *           3. Start FDCAN1 communication
   *           4. Activate Rx FIFO 0 new message interrupt

@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    log.c
-  * @brief   Log module implementation — UART7 output driver with debug CLI
+  * @brief   Log module implementation -- UART7 output driver with debug CLI
   *
   *          Output interface: UART7 (PF6-RX, PF7-TX @ 115200 8N1)
   *
@@ -15,7 +15,7 @@
   *          Runtime filtering via g_log_config.level skips unwanted output.
   *
   *          Debug Commands (built-in):
-  *            help           — Show available commands
+  *            help           -- Show available commands
   ******************************************************************************
   * @attention
   *
@@ -61,7 +61,7 @@ typedef struct {
   * @brief Level tag strings for human-readable prefix
   */
 static const char * const LOG_TAG[] = {
-    [LOG_LEVEL_NONE]    = "",          /* RAW mode — no tag */
+    [LOG_LEVEL_NONE]    = "",          /* RAW mode -- no tag */
     [LOG_LEVEL_ERROR]   = "[ERR] ",
     [LOG_LEVEL_WARN]    = "[WARN] ",
     [LOG_LEVEL_INFO]    = "[INFO] ",
@@ -74,7 +74,7 @@ static const char * const LOG_TAG[] = {
 /* Private variables ---------------------------------------------------------*/
 
 /**
-  * @brief Default log configuration — UART7, 100ms timeout, all levels, timestamp enabled
+  * @brief Default log configuration -- UART7, 100ms timeout, all levels, timestamp enabled
   */
 static Log_Config_t g_log_config = {
     .huart     = NULL,     /* Will be set to &huart7 in Log_Init() */
@@ -86,7 +86,7 @@ static Log_Config_t g_log_config = {
 /* ── Debug command subsystem ──────────────────────────────────────────────── */
 
 /**
-  * @brief Debug command table — stores registered commands
+  * @brief Debug command table -- stores registered commands
   */
 static Log_DbgCmdEntry_t g_dbg_cmds[LOG_DBG_MAX_CMDS];
 static uint8_t           g_dbg_cmd_count = 0U;
@@ -100,18 +100,18 @@ static uint8_t g_dbg_enabled = 1U;   /*!< Debug CLI fallback (default: on) */
 /**
   * @brief Mutex protecting HAL_UART_Transmit from concurrent task access.
   * @note  Serializes UART TX without disabling IRQs, so RX IDLE interrupts
-  *        can still fire during TX — preventing DMA ring-buffer overrun.
+  *        can still fire during TX -- preventing DMA ring-buffer overrun.
   */
 static osMutexId_t g_uart_tx_mutex = NULL;
 
 /**
-  * @brief Message queue — ISR pushes completed lines, task consumer pops them.
+  * @brief Message queue -- ISR pushes completed lines, task consumer pops them.
   *        Decouples ISR timing from task processing speed.
   */
 static osMessageQueueId_t g_line_queue = NULL;
 
 /**
-  * @brief DMA RX ring buffer — receives UART data via DMA in CIRCULAR mode.
+  * @brief DMA RX ring buffer -- receives UART data via DMA in CIRCULAR mode.
   *        DMA continuously writes incoming data; IDLE ISR reads and assembles
   *        lines, pushing them into g_line_queue.
   */
@@ -193,24 +193,24 @@ HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config)
     /* Start UART RX via DMA with IDLE line detection (CIRCULAR mode).
      * DMA continuously receives bytes into g_dma_rx_buf ring buffer.
      * HAL_UARTEx_RxEventCallback() assembles lines and pushes them to
-     * g_line_queue. DMA keeps running — no restart needed. */
+     * g_line_queue. DMA keeps running -- no restart needed. */
     if (HAL_UARTEx_ReceiveToIdle_DMA(g_log_config.huart,
             g_dma_rx_buf, LOG_DBG_BUF_SIZE) != HAL_OK)
     {
         return HAL_ERROR;
     }
 
-    /* Disable DMA half-transfer interrupt — only IDLE/TC events matter */
+    /* Disable DMA half-transfer interrupt -- only IDLE/TC events matter */
     __HAL_DMA_DISABLE_IT(g_log_config.huart->hdmarx, DMA_IT_HT);
 
     Log_Print(LOG_LEVEL_INFO, "Log module initialized (UART7 @ 115200 8N1, DMA+IDLE, queue)");
-    Log_Print(LOG_LEVEL_INFO, "Debug CLI ready — type 'help' for commands");
+    Log_Print(LOG_LEVEL_INFO, "Debug CLI ready -- type 'help' for commands");
 
     return HAL_OK;
 }
 
 /**
-  * @brief  Core print function — formatted output via UART7
+  * @brief  Core print function -- formatted output via UART7
   */
 void Log_Print(uint8_t level, const char *fmt, ...)
 {
@@ -254,7 +254,7 @@ void Log_Print(uint8_t level, const char *fmt, ...)
 }
 
 /**
-  * @brief  Write raw data to UART — no prefix, timestamp, or formatting
+  * @brief  Write raw data to UART -- no prefix, timestamp, or formatting
   * @note   Used by SCPI_Write() for clean SCPI protocol responses.
   */
 void Log_WriteRaw(const char *data, size_t len)
@@ -267,7 +267,7 @@ void Log_WriteRaw(const char *data, size_t len)
 }
 
 /**
-  * @brief  Flush log output — no-op (blocking TX already guarantees completion)
+  * @brief  Flush log output -- no-op (blocking TX already guarantees completion)
   */
 void Log_Flush(void) {}
 
@@ -291,7 +291,7 @@ uint8_t Log_GetLevel(void)
 
 /**
   * @brief  Non-blocking read of one complete line from the RX message queue.
-  * @note   Each line is consumed on read — no separate "consume" step needed.
+  * @note   Each line is consumed on read -- no separate "consume" step needed.
   */
 uint8_t Log_DbgGetLine(char *buf, uint8_t maxlen)
 {
@@ -383,6 +383,34 @@ uint8_t Log_DbgIsEnabled(void)
     return g_dbg_enabled;
 }
 
+/**
+  * @brief  Check if a command line starts with a registered debug command
+  */
+uint8_t Log_DbgIsKnownCommand(const char *line)
+{
+    if (line == NULL || *line == '\0') return 0U;
+
+    /* Extract first token */
+    const char *p = line;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == '\0') return 0U;
+    const char *start = p;
+    while (*p != '\0' && *p != ' ' && *p != '\t') p++;
+    size_t token_len = (size_t)(p - start);
+    if (token_len == 0U) return 0U;
+
+    /* Look up in registered commands */
+    for (uint8_t i = 0U; i < g_dbg_cmd_count; i++)
+    {
+        if (strlen(g_dbg_cmds[i].name) == token_len &&
+            strncmp(g_dbg_cmds[i].name, start, token_len) == 0)
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
 /* Private functions ---------------------------------------------------------*/
 
 /**
@@ -397,7 +425,7 @@ static int _log_write_timestamp(char *buf, size_t size)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  HAL UART RX Event callback — DMA ring buffer → message queue              */
+/*  HAL UART RX Event callback -- DMA ring buffer → message queue              */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -423,7 +451,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         return;
     }
 
-    /* Only process UART7 — the log/debug UART */
+    /* Only process UART7 -- the log/debug UART */
     if (huart != g_log_config.huart) return;
 
     /* ── Local static line assembly buffer (ISR-private, no concurrent access) */
@@ -475,7 +503,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
                 {
                     line_buf[line_pos] = '\0';
                     line_pos = 0U;
-                    /* Push to queue — drop if full (timeout=0, non-blocking) */
+                    /* Push to queue -- drop if full (timeout=0, non-blocking) */
                     osMessageQueuePut(g_line_queue, line_buf, 0U, 0U);
                 }
                 continue;
@@ -500,7 +528,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'help' command — list all registered commands with descriptions
+  * @brief  'help' command -- list all registered commands with descriptions
   */
 static void _dbg_cmd_help(int argc, char **argv)
 {
@@ -512,7 +540,7 @@ static void _dbg_cmd_help(int argc, char **argv)
     {
         if (g_dbg_cmds[i].help != NULL)
         {
-            Log_Print(LOG_LEVEL_INFO, "  %-10s — %s", g_dbg_cmds[i].name, g_dbg_cmds[i].help);
+            Log_Print(LOG_LEVEL_INFO, "  %-10s -- %s", g_dbg_cmds[i].name, g_dbg_cmds[i].help);
         }
         else
         {

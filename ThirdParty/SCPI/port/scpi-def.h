@@ -21,7 +21,7 @@
   *            DIAGnostic  → DEBUg, ECHO
   *
   *          Reference:
-  *            Doc/SCPI_Commands.md — Full SCPI command reference
+  *            Doc/SCPI_Commands.md -- Full SCPI command reference
   ******************************************************************************
   * @attention
   *
@@ -65,7 +65,7 @@ scpi_result_t SCPI_Flush(scpi_t *context);
 /* ── SCPI lifecycle ───────────────────────────────────────────────────────── */
 
 /**
-  * @brief  Initialize the SCPI subsystem — call once after Log_Init()
+  * @brief  Initialize the SCPI subsystem -- call once after Log_Init()
   */
 void SCPI_SystemInit(void);
 

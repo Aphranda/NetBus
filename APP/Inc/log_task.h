@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    log_task.h
-  * @brief   Log task — wraps ThirdParty/Log into an App_Module_t interface
+  * @brief   Log task -- wraps ThirdParty/Log into an App_Module_t interface
   *
   *          Responsibilities:
   *            - Initialize the Log subsystem (binds UART7)
@@ -44,7 +44,7 @@ extern "C" {
 /* Exported variables --------------------------------------------------------*/
 
 /**
-  * @brief  Log task module descriptor — register with App_RegisterModule()
+  * @brief  Log task module descriptor -- register with App_RegisterModule()
   * @note   Must be registered BEFORE App_Task_Init() so that Log is available
   *         for diagnostic output during other modules' initialization.
   */

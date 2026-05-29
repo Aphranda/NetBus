@@ -30,7 +30,7 @@
 /**
   ******************************************************************************
   * @file    scpi_port.c
-  * @brief   SCPI port layer — UART7 via Log module
+  * @brief   SCPI port layer -- UART7 via Log module
   *
   *          NetBus adaptation:
   *            - SCPI_Write() routes raw output through Log_WriteRaw() → UART7,
@@ -54,7 +54,7 @@
 
 /**
  * @brief  Write raw data to the SCPI output channel (UART7)
-  * @note   Uses Log_WriteRaw() for clean output — no timestamp, no level tag.
+  * @note   Uses Log_WriteRaw() for clean output -- no timestamp, no level tag.
   *         This is critical for SCPI protocol compliance: responses like *IDN?
   *         must return exactly "NetBus,PPA-NB100,..." without decoration.
   */
@@ -69,7 +69,7 @@ size_t SCPI_Write(scpi_t *context, const char *data, size_t len)
 /**
   * @brief  Report SCPI parser errors via the log system
   * @note   Unlike SCPI_Write, errors include timestamp/level for diagnostics.
-  *         When err == 0, the error queue is empty — nothing to print.
+  *         When err == 0, the error queue is empty -- nothing to print.
   */
 int SCPI_Error(scpi_t *context, int_fast16_t err)
 {
@@ -111,7 +111,7 @@ scpi_result_t SCPI_Reset(scpi_t *context)
 
 /**
   * @brief  Flush SCPI output
-  * @note   No-op — HAL_UART_Transmit (called by Log_WriteRaw) is blocking,
+  * @note   No-op -- HAL_UART_Transmit (called by Log_WriteRaw) is blocking,
   *         so output is already flushed by the time it returns.
   */
 scpi_result_t SCPI_Flush(scpi_t *context)
@@ -122,7 +122,7 @@ scpi_result_t SCPI_Flush(scpi_t *context)
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  IEEE 488.2 Status Register Model                                          */
-/*  (migrated from libscpi ieee488.c — required by error.c and parser core)   */
+/*  (migrated from libscpi ieee488.c -- required by error.c and parser core)   */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 static const scpi_reg_info_t scpi_reg_details[SCPI_REG_COUNT] = {

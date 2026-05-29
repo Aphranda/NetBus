@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    modbus.h
-  * @brief   Modbus RTU Master driver — request/response transaction layer
+  * @brief   Modbus RTU Master driver -- request/response transaction layer
   *
   *          Architecture:
   *            This module implements a Modbus RTU Master (client) that sends
@@ -30,12 +30,12 @@
   *            └─────────────────────────────────────────────────────┘
   *
   *          Important Design Decisions:
-  *            1. Synchronous (blocking) — each request waits for the
+  *            1. Synchronous (blocking) -- each request waits for the
   *               response or timeout. Simplifies application logic.
-  *            2. Flushes RX buffer before each request — prevents
+  *            2. Flushes RX buffer before each request -- prevents
   *               stale data from being misinterpreted as a response.
   *            3. Uses RS485_Transmit() (non-blocking DMA TX) + polling
-  *               RX — does not rely on the IDLE callback for frame
+  *               RX -- does not rely on the IDLE callback for frame
   *               assembly.
   *            4. Thread-safe for single-caller use (no reentrancy).
   *
@@ -46,14 +46,14 @@
   *            [Slave Addr (1)] [FC | 0x80 (1)] [Exception Code (1)] [CRC Lo] [CRC Hi]
   *
   *          Supported Function Codes:
-  *            FC 0x01 — Read Coils
-  *            FC 0x02 — Read Discrete Inputs
-  *            FC 0x03 — Read Holding Registers
-  *            FC 0x04 — Read Input Registers
-  *            FC 0x05 — Write Single Coil
-  *            FC 0x06 — Write Single Register
-  *            FC 0x0F — Write Multiple Coils
-  *            FC 0x10 — Write Multiple Registers
+  *            FC 0x01 -- Read Coils
+  *            FC 0x02 -- Read Discrete Inputs
+  *            FC 0x03 -- Read Holding Registers
+  *            FC 0x04 -- Read Input Registers
+  *            FC 0x05 -- Write Single Coil
+  *            FC 0x06 -- Write Single Register
+  *            FC 0x0F -- Write Multiple Coils
+  *            FC 0x10 -- Write Multiple Registers
   ******************************************************************************
   * @attention
   *
@@ -166,7 +166,7 @@ uint32_t Modbus_GetTimeout(void);
 /**
   * @brief  Check if a Modbus transaction is currently pending
   * @retval 1 if a transaction is in progress, 0 otherwise
-  * @note   Useful for cooperative multitasking — other tasks (e.g.
+  * @note   Useful for cooperative multitasking -- other tasks (e.g.
   *         rfsw_task process function) should not consume RS485 RX
   *         data while a transaction is pending.
   */
@@ -316,7 +316,7 @@ const char *Modbus_ExceptionString(uint8_t exc_code);
 
 /**
   * @brief  Send a raw Modbus frame and wait for response (low-level API)
-  * @note   Advanced use only — most applications should use the higher-level
+  * @note   Advanced use only -- most applications should use the higher-level
   *         Modbus_ReadHoldingRegisters(), etc. This function allows sending
   *         arbitrary Modbus frames and receiving the raw response.
   *

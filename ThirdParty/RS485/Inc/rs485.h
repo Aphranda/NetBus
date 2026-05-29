@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    rs485.h
-  * @brief   RS485 driver for UART8 — idle-line DMA, ring buffer
+  * @brief   RS485 driver for UART8 -- idle-line DMA, ring buffer
   *
   *          Hardware:
   *            UART8: PE0 (RX), PE1 (TX)
@@ -65,7 +65,7 @@ extern "C" {
   * @param data  Pointer to received data buffer
   * @param len   Number of bytes received in this frame
   * @note  Called from HAL_UARTEx_RxEventCallback() (interrupt context).
-  *        Keep processing minimal — defer heavy work to the main loop.
+  *        Keep processing minimal -- defer heavy work to the main loop.
   */
 typedef void (*RS485_RxCallback_t)(uint8_t *data, uint16_t len);
 
@@ -171,7 +171,7 @@ UART_HandleTypeDef *RS485_GetUartHandle(void);
 /**
   * @brief  RS485 UART (UART8) RX Event callback
   * @note   Processes IDLE line / DMA TC events for RS485 frame reception.
-  *         Called by irq_router.c dispatcher — do NOT call directly.
+  *         Called by irq_router.c dispatcher -- do NOT call directly.
   * @param  huart  UART handle (must be huart8)
   * @param  Size   Number of bytes transferred (unused)
   */

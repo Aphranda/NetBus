@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    rfsw_task.h
-  * @brief   RF Switch control task — RS485 Modbus RTU master for SP10T switches
+  * @brief   RF Switch control task -- RS485 Modbus RTU master for SP10T switches
   *
   *          Responsibilities:
  *            - Register debug CLI command "rfsw" for RF switch control
@@ -15,18 +15,18 @@
   *            3. App_Task_Init() will invoke rfsw_task's init automatically
   *
   *          Debug CLI (rfsw):
-  *            rfsw get <addr>              — Read current channel
-  *            rfsw set <addr> <ch>         — Set channel (1-10)
-  *            rfsw mode <addr> [io|cmd]    — Get/set work mode
-  *            rfsw info <addr>             — Read device identity & status
-  *            rfsw output <addr> <id> <0|1>— Set single output coil
-  *            rfsw outputs <addr>          — Read all 6 output coils
-  *            rfsw inputs <addr>           — Read 4 discrete inputs
-  *            rfsw status <addr>           — Read device status register
-  *            rfsw id <addr> <new_id>      — Change device Modbus address
+  *            rfsw get <addr>              -- Read current channel
+  *            rfsw set <addr> <ch>         -- Set channel (1-10)
+  *            rfsw mode <addr> [io|cmd]    -- Get/set work mode
+  *            rfsw info <addr>             -- Read device identity & status
+  *            rfsw output <addr> <id> <0|1>-- Set single output coil
+  *            rfsw outputs <addr>          -- Read all 6 output coils
+  *            rfsw inputs <addr>           -- Read 4 discrete inputs
+  *            rfsw status <addr>           -- Read device status register
+  *            rfsw id <addr> <new_id>      -- Change device Modbus address
   *
   *          Reference:
-  *            Doc/RF_Switch_Commands.md — SP10T Modbus RTU register map
+  *            Doc/RF_Switch_Commands.md -- SP10T Modbus RTU register map
   ******************************************************************************
   * @attention
   *
@@ -88,7 +88,7 @@ extern "C" {
 /* Exported variables --------------------------------------------------------*/
 
 /**
-  * @brief  RF Switch task module descriptor — register with App_RegisterModule()
+  * @brief  RF Switch task module descriptor -- register with App_RegisterModule()
   * @note   Must be registered after Log task so that LOG_* macros are available.
   */
 extern const App_Module_t g_rfsw_task_module;

@@ -110,7 +110,7 @@ int main(void)
   MX_UART7_Init();
   MX_UART8_Init();
   /* USER CODE BEGIN 2 */
-  /* Initialize all application modules — registers and initializes built-in tasks */
+  /* Initialize all application modules -- registers and initializes built-in tasks */
   if (App_Init() != APP_OK)
   {
       Error_Handler();

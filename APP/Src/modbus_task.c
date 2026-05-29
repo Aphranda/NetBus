@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    modbus_task.c
-  * @brief   Modbus task — owns RS485 + Modbus RTU Master + "modbus" CLI
+  * @brief   Modbus task -- owns RS485 + Modbus RTU Master + "modbus" CLI
   *
   *          Runs in StartModbusTask FreeRTOS thread.
   ******************************************************************************
@@ -102,8 +102,8 @@ static void _dbg_cmd_modbus(int argc, char **argv)
 {
     if (argc < 2)
     {
-        LOG_INFO("Usage: modbus <hex bytes...>  — send raw Modbus frame (CRC auto)");
-        LOG_INFO("  modbus 01 03 00 00 00 01    — read channel from device 1");
+        LOG_INFO("Usage: modbus <hex bytes...>  -- send raw Modbus frame (CRC auto)");
+        LOG_INFO("  modbus 01 03 00 00 00 01    -- read channel from device 1");
         return;
     }
 

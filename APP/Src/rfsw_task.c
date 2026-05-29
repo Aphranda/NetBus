@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    rfsw_task.c
-  * @brief   RF Switch control task — RS485 Modbus RTU master for SP10T switches
+  * @brief   RF Switch control task -- RS485 Modbus RTU master for SP10T switches
   *
   *          Architecture:
   *            - init:   Registers "rfsw" CLI. RS485/Modbus already initialized
@@ -11,19 +11,19 @@
   *
   *          RF Switch Register Map (from Doc/RF_Switch_Commands.md):
   *            Holding Registers (FC 0x03/0x06/0x10):
-  *              0x0000 — Channel (1-10)
-  *              0x0001 — Work mode (0=IO, 1=CMD)
-  *              0x0002 — Device Modbus address
-  *              0x0003-0x0004 — Serial number (32-bit)
-  *              0x0005-0x0008 — Device name (4×uint16, 8 ASCII chars)
-  *              0x0009 — Device status bits
-  *              0x000A — Output control bits
-  *              0x000B — Firmware version
-  *              0x001B — Hardware version
+  *              0x0000 -- Channel (1-10)
+  *              0x0001 -- Work mode (0=IO, 1=CMD)
+  *              0x0002 -- Device Modbus address
+  *              0x0003-0x0004 -- Serial number (32-bit)
+  *              0x0005-0x0008 -- Device name (4×uint16, 8 ASCII chars)
+  *              0x0009 -- Device status bits
+  *              0x000A -- Output control bits
+  *              0x000B -- Firmware version
+  *              0x001B -- Hardware version
   *            Coils (FC 0x01/0x05/0x0F):
-  *              0x0000-0x0005 — Output coils S0_CA..S2_CB
+  *              0x0000-0x0005 -- Output coils S0_CA..S2_CB
   *            Discrete Inputs (FC 0x02):
-  *              0x0000-0x0003 — Input pins CTRL1..CTRL4
+  *              0x0000-0x0003 -- Input pins CTRL1..CTRL4
   *
   *          Debug CLI Usage:
   ******************************************************************************
@@ -68,7 +68,6 @@
   */
 static uint8_t g_rs485_rx_buf[RS485_PRINT_MAX];
 
-
 /* Private function prototypes -----------------------------------------------*/
 
 static App_Status_t _rfsw_task_init(void);
@@ -102,7 +101,7 @@ static void     _extract_name_chars(const uint16_t *regs, char *name, uint8_t ma
 /* Exported variables --------------------------------------------------------*/
 
 /**
-  * @brief  RF Switch task module descriptor — register via App_RegisterModule()
+  * @brief  RF Switch task module descriptor -- register via App_RegisterModule()
   * @note   Register after Log task so LOG_* macros are usable during init.
   */
 const App_Module_t g_rfsw_task_module = {
@@ -372,50 +371,50 @@ static Modbus_Result_t _rfsw_write_device_id(uint8_t addr, uint8_t new_id)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "rfsw" command                                                  */
+/*  Debug CLI -- "rfsw" command                                                  */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'rfsw' debug CLI command — control SP10T RF switches via Modbus RTU
+  * @brief  'rfsw' debug CLI command -- control SP10T RF switches via Modbus RTU
   *
   *         Usage:
-  *           rfsw get <addr>              — Read current channel
-  *           rfsw set <addr> <ch>         — Set channel (1-10)
-  *           rfsw mode <addr> [io|cmd]    — Get/set work mode
-  *           rfsw info <addr>             — Read device identity & status
-  *           rfsw output <addr> <id> <0|1>— Set single output coil
-  *           rfsw outputs <addr>          — Read all 6 output coils
-  *           rfsw inputs <addr>           — Read 4 discrete inputs
-  *           rfsw status <addr>           — Read device status register
-  *           rfsw id <addr> <new_id>      — Change device Modbus address
+  *           rfsw get <addr>              -- Read current channel
+  *           rfsw set <addr> <ch>         -- Set channel (1-10)
+  *           rfsw mode <addr> [io|cmd]    -- Get/set work mode
+  *           rfsw info <addr>             -- Read device identity & status
+  *           rfsw output <addr> <id> <0|1>-- Set single output coil
+  *           rfsw outputs <addr>          -- Read all 6 output coils
+  *           rfsw inputs <addr>           -- Read 4 discrete inputs
+  *           rfsw status <addr>           -- Read device status register
+  *           rfsw id <addr> <new_id>      -- Change device Modbus address
   *
   *         Examples:
-  *           rfsw get 1                   — Read channel from device at addr 1
-  *           rfsw set 1 5                 — Set device 1 to channel 5
-  *           rfsw mode 1 cmd              — Set device 1 to COMMAND mode
-  *           rfsw info 1                  — Dump all device info
-  *           rfsw outputs 1               — Read all output coil states
-  *           rfsw output 1 0 1            — Turn ON output 0 (S0_CA) on device 1
+  *           rfsw get 1                   -- Read channel from device at addr 1
+  *           rfsw set 1 5                 -- Set device 1 to channel 5
+  *           rfsw mode 1 cmd              -- Set device 1 to COMMAND mode
+  *           rfsw info 1                  -- Dump all device info
+  *           rfsw outputs 1               -- Read all output coil states
+  *           rfsw output 1 0 1            -- Turn ON output 0 (S0_CA) on device 1
   */
 static void _dbg_cmd_rfsw(int argc, char **argv)
 {
     if (argc < 2)
     {
         LOG_INFO("RF Switch Control Commands (SP10T via Modbus RTU):");
-        LOG_INFO("  rfsw get <addr>              — Read current channel");
-        LOG_INFO("  rfsw set <addr> <ch>         — Set channel (1-10)");
-        LOG_INFO("  rfsw mode <addr> [io|cmd]    — Get/set work mode");
-        LOG_INFO("  rfsw info <addr>             — Read device identity & status");
-        LOG_INFO("  rfsw output <addr> <id> <0|1>— Set single output coil");
-        LOG_INFO("  rfsw outputs <addr>          — Read all 6 output coils");
-        LOG_INFO("  rfsw inputs <addr>           — Read 4 discrete inputs");
-        LOG_INFO("  rfsw status <addr>           — Read device status register");
-        LOG_INFO("  rfsw id <addr> <new_id>      — Change device Modbus address");
+        LOG_INFO("  rfsw get <addr>              -- Read current channel");
+        LOG_INFO("  rfsw set <addr> <ch>         -- Set channel (1-10)");
+        LOG_INFO("  rfsw mode <addr> [io|cmd]    -- Get/set work mode");
+        LOG_INFO("  rfsw info <addr>             -- Read device identity & status");
+        LOG_INFO("  rfsw output <addr> <id> <0|1>-- Set single output coil");
+        LOG_INFO("  rfsw outputs <addr>          -- Read all 6 output coils");
+        LOG_INFO("  rfsw inputs <addr>           -- Read 4 discrete inputs");
+        LOG_INFO("  rfsw status <addr>           -- Read device status register");
+        LOG_INFO("  rfsw id <addr> <new_id>      -- Change device Modbus address");
         LOG_INFO("Examples:");
-        LOG_INFO("  rfsw get 1         — read channel from device 1");
-        LOG_INFO("  rfsw set 1 5       — set device 1 to channel 5");
-        LOG_INFO("  rfsw mode 1 cmd    — set device 1 to COMMAND mode");
-        LOG_INFO("  rfsw info 1        — dump all device info");
+        LOG_INFO("  rfsw get 1         -- read channel from device 1");
+        LOG_INFO("  rfsw set 1 5       -- set device 1 to channel 5");
+        LOG_INFO("  rfsw mode 1 cmd    -- set device 1 to COMMAND mode");
+        LOG_INFO("  rfsw info 1        -- dump all device info");
         return;
     }
 
@@ -876,7 +875,7 @@ static void _print_modbus_result(Modbus_Result_t res)
     }
     else if (res.status != MODBUS_OK)
     {
-        LOG_ERROR("RFSW: Modbus FAILED — %s", Modbus_StatusString(res.status));
+        LOG_ERROR("RFSW: Modbus FAILED -- %s", Modbus_StatusString(res.status));
     }
 }
 

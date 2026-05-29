@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    rs485.c
-  * @brief   RS485 driver implementation — UART8, idle-line DMA, ring buffer
+  * @brief   RS485 driver implementation -- UART8, idle-line DMA, ring buffer
   *
   *          Architecture (mirrors UART7 Log module pattern):
   *
@@ -25,7 +25,7 @@
   *            │
   *            └─ Application reads via RS485_Available() / RS485_Receive()
   *
-  *          DMA runs continuously in CIRCULAR mode — writes directly into
+  *          DMA runs continuously in CIRCULAR mode -- writes directly into
   *          g_rs485.rx_ring.buf. The ring buffer head is derived from NDTR
   *          on each IDLE event. The application reads from tail.
   *          No DMA restart is needed.
@@ -121,7 +121,7 @@ static inline uint16_t _rb_available(void)
 /* ── TX Complete callback (HAL weak override) ─────────────────────────────── */
 
 /**
-  * @brief  UART TX complete callback — de-asserts DE after DMA TX finishes
+  * @brief  UART TX complete callback -- de-asserts DE after DMA TX finishes
   * @note   Overrides the weak HAL_UART_TxCpltCallback().
   *         Only acts on UART8 (RS485). For UART7, this is unused (blocking TX).
   */
@@ -129,7 +129,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart == g_rs485.huart)
     {
-        /* De-assert DE — back to RX mode */
+        /* De-assert DE -- back to RX mode */
         _de_deassert();
         g_rs485.tx_busy = 0U;
     }
@@ -145,7 +145,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   *         IDLE event: computes current DMA write position from NDTR,
   *         updates ring buffer head, calls user callback with available data.
   *
-  *         TC event (DMA wrap): head naturally wraps — no special handling
+  *         TC event (DMA wrap): head naturally wraps -- no special handling
   *         needed since NDTR resets to BUF_SIZE.
   *
   * @param  huart  UART handle
@@ -165,14 +165,14 @@ void RS485_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 
     /* ── Handle TC (DMA wrap) events ───────────────────────────────────── */
     /* On TC, the entire buffer just wrapped. Update head to wr_idx (0).
-     * The application's tail may be behind — it will catch up naturally. */
+     * The application's tail may be behind -- it will catch up naturally. */
     if (huart->RxEventType == HAL_UART_RXEVENT_TC)
     {
         g_rs485.rx_ring.head = wr_idx;
         return;
     }
 
-    /* ── IDLE event — update head and notify application ───────────────── */
+    /* ── IDLE event -- update head and notify application ───────────────── */
     g_rs485.rx_ring.head = wr_idx;
 
     /* Invoke user callback with pointer to available data */
@@ -195,7 +195,7 @@ void RS485_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         }
     }
 
-    /* DMA runs continuously in CIRCULAR mode — no restart needed here.
+    /* DMA runs continuously in CIRCULAR mode -- no restart needed here.
      * __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT) was done in Init. */
 }
 
@@ -227,7 +227,7 @@ HAL_StatusTypeDef RS485_Init(void)
      * DMA continuously receives bytes into the ring buffer.
      * When the UART line goes idle (after a complete frame), the IDLE
      * interrupt fires and HAL_UARTEx_RxEventCallback() processes the
-     * received bytes. DMA keeps running — no restart needed. */
+     * received bytes. DMA keeps running -- no restart needed. */
     if (HAL_UARTEx_ReceiveToIdle_DMA(g_rs485.huart,
                                      g_rs485.rx_ring.buf,
                                      RS485_RX_BUF_SIZE) != HAL_OK)
@@ -235,7 +235,7 @@ HAL_StatusTypeDef RS485_Init(void)
         return HAL_ERROR;
     }
 
-    /* Disable DMA half-transfer interrupt — only care about IDLE events */
+    /* Disable DMA half-transfer interrupt -- only care about IDLE events */
     __HAL_DMA_DISABLE_IT(g_rs485.huart->hdmarx, DMA_IT_HT);
 
     return HAL_OK;
@@ -256,7 +256,7 @@ HAL_StatusTypeDef RS485_Send(const uint8_t *data, uint16_t len)
         return HAL_ERROR;
     }
 
-    /* Assert DE — enable RS485 driver */
+    /* Assert DE -- enable RS485 driver */
     _de_assert();
 
     /* Brief settling delay for transceiver */
@@ -268,7 +268,7 @@ HAL_StatusTypeDef RS485_Send(const uint8_t *data, uint16_t len)
     /* Transmit data (blocking) */
     status = HAL_UART_Transmit(g_rs485.huart, (uint8_t *)data, len, 1000U);
 
-    /* De-assert DE — back to RX mode */
+    /* De-assert DE -- back to RX mode */
     _de_deassert();
 
     return status;
@@ -296,7 +296,7 @@ HAL_StatusTypeDef RS485_Send_IT(const uint8_t *data, uint16_t len)
         return HAL_BUSY;
     }
 
-    /* Assert DE — enable RS485 driver */
+    /* Assert DE -- enable RS485 driver */
     _de_assert();
 
     /* Brief settling delay for transceiver */
@@ -313,7 +313,7 @@ HAL_StatusTypeDef RS485_Send_IT(const uint8_t *data, uint16_t len)
 
     if (status != HAL_OK)
     {
-        /* DMA start failed — revert to RX mode */
+        /* DMA start failed -- revert to RX mode */
         g_rs485.tx_busy = 0U;
         _de_deassert();
     }
@@ -402,7 +402,7 @@ uint8_t *RS485_ReceivePtr(uint16_t *out_len)
         uint16_t end = g_rs485.rx_ring.tail + avail;
         if (end > RS485_RX_BUF_SIZE)
         {
-            /* Data wraps — only provide first contiguous segment */
+            /* Data wraps -- only provide first contiguous segment */
             len = RS485_RX_BUF_SIZE - g_rs485.rx_ring.tail;
         }
         else

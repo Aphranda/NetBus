@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    net_scpi.c
-  * @brief   SCPI-over-TCP server — LWIP sockets, port 5025
+  * @brief   SCPI-over-TCP server -- LWIP sockets, port 5025
   * @note    Thread safety: SCPI_TryParse() handles its own mutex internally.
   ******************************************************************************
   */

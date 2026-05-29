@@ -6,7 +6,7 @@
   *
   *          Architecture:
   *            - SCPI callbacks call directly into IO/CAN/Modbus/Detector
-  *              driver APIs — no dependency on debug CLI handlers.
+  *              driver APIs -- no dependency on debug CLI handlers.
   *            - All TX output goes through SCPI_Write(), which routes to
   *              Log_Print() (and thus UART7).
   *            - Responses use standard SCPI result functions when possible;
@@ -180,7 +180,7 @@ scpi_result_t SCPI_SystemCommCanSend(scpi_t *context)
         return SCPI_RES_ERR;
     }
 
-    /* Collect data bytes — up to CAN_MAX_DATA_LEN (64) */
+    /* Collect data bytes -- up to CAN_MAX_DATA_LEN (64) */
     CAN_Msg_t tx_msg;
     memset(&tx_msg, 0, sizeof(tx_msg));
     tx_msg.id = can_id;
@@ -1026,7 +1026,7 @@ scpi_result_t SCPI_DiagEcho(scpi_t *context)
 
 scpi_result_t SCPI_DiagEchoQ(scpi_t *context)
 {
-    /* Echo state is simple — no public getter, just report ON */
+    /* Echo state is simple -- no public getter, just report ON */
     _write(context, "ON");
     return SCPI_RES_OK;
 }
@@ -1153,7 +1153,7 @@ scpi_bool_t SCPI_TryParse(const char *line)
     if (scpi_parse_mutex == NULL)
         scpi_parse_mutex = osMutexNew(NULL);
 
-    /* Append \n terminator — SCPI_Parse requires it to dispatch */
+    /* Append \n terminator -- SCPI_Parse requires it to dispatch */
     size_t len = strlen(line);
     if (len >= SCPI_INPUT_BUFFER_LENGTH - 2)
         len = SCPI_INPUT_BUFFER_LENGTH - 2;

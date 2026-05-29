@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    detector_task.h
-  * @brief   A1 Detector Board CAN protocol — command API for system control,
+  * @brief   A1 Detector Board CAN protocol -- command API for system control,
   *          detector operation, power management, flash access, calibration,
   *          and OTA update.
   *
@@ -224,7 +224,7 @@ extern const App_Module_t g_detector_task_module;
 
 /* Exported functions --------------------------------------------------------*/
 
-/** @brief Debug CLI handler for "detector" command — registered by log_task */
+/** @brief Debug CLI handler for "detector" command -- registered by log_task */
 void Detector_CLIHandler(int argc, char **argv);
 
 /* ── System commands ──────────────────────────────────────────────────────── */

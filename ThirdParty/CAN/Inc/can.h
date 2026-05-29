@@ -90,7 +90,7 @@ uint8_t CAN_BytesToDLC(uint8_t bytes);
   * @brief CAN RX frame callback
   * @param msg  Pointer to the received CAN message
   * @note  Called from HAL_FDCAN_RxFifo0Callback() (interrupt context).
-  *        Keep processing minimal — defer heavy work to the main loop.
+  *        Keep processing minimal -- defer heavy work to the main loop.
   */
 typedef void (*CAN_RxCallback_t)(const CAN_Msg_t *msg);
 

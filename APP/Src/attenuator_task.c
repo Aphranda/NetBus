@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    attenuator_task.c
-  * @brief   Attenuator task — owns the "att" debug CLI command
+  * @brief   Attenuator task -- owns the "att" debug CLI command
   *
   *          The "att" command was previously a built-in in ThirdParty/Log.
   *          Extracted here so the Log layer stays generic and IO-dependent
@@ -65,21 +65,21 @@ static void _attenuator_task_on_error(App_Status_t err)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "att" command                                                   */
+/*  Debug CLI -- "att" command                                                   */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'att' command — control attenuators
+  * @brief  'att' command -- control attenuators
   *
   *         Usage:
-  *           att a <0-15>   — Set Attenuator A value
-  *           att b <0-15>   — Set Attenuator B value
-  *           att a get      — Get Attenuator A value
-  *           att a ?        — Alias for att a get
-  *           att b get      — Get Attenuator B value
-  *           att b ?        — Alias for att b get
-  *           att get        — Get both attenuator values
-  *           att ?          — Alias for att get
+  *           att a <0-15>   -- Set Attenuator A value
+  *           att b <0-15>   -- Set Attenuator B value
+  *           att a get      -- Get Attenuator A value
+  *           att a ?        -- Alias for att a get
+  *           att b get      -- Get Attenuator B value
+  *           att b ?        -- Alias for att b get
+  *           att get        -- Get both attenuator values
+  *           att ?          -- Alias for att get
   */
 static void _dbg_cmd_att(int argc, char **argv)
 {

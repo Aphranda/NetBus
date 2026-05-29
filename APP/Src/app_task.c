@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    app_task.c
-  * @brief   Application task manager — pure orchestration framework
+  * @brief   Application task manager -- pure orchestration framework
   *
   *          Architecture:
   *            main()
@@ -61,7 +61,7 @@
 static App_State_t g_app_state = APP_STATE_RESET;
 
 /**
-  * @brief  Registered module table — statically allocated
+  * @brief  Registered module table -- statically allocated
   */
 static const App_Module_t *g_modules[APP_MAX_MODULES];
 static uint8_t             g_module_count = 0U;
@@ -76,7 +76,7 @@ static uint32_t g_error_count = 0U;
 /* Exported functions --------------------------------------------------------*/
 
 /**
-  * @brief  Initialize all application modules — single entry point for main()
+  * @brief  Initialize all application modules -- single entry point for main()
   * @note   Registers ALL built-in modules (Log first, then others), then
   *         initializes them in registration order via App_Task_Init().
   *         As new modules are added, register them here instead of in main().
@@ -86,21 +86,21 @@ App_Status_t App_Init(void)
 {
     App_Status_t status;
 
-    /* ── Register Log task first — must be first so other modules can log during init ─ */
+    /* ── Register Log task first -- must be first so other modules can log during init ─ */
     status = App_RegisterModule(&g_log_task_module);
     if (status != APP_OK)
     {
         return status;
     }
 
-    /* ── Register CAN task — owns FDCAN1 driver ────────────────────────────── */
+    /* ── Register CAN task -- owns FDCAN1 driver ────────────────────────────── */
     status = App_RegisterModule(&g_can_task_module);
     if (status != APP_OK)
     {
         return status;
     }
 
-    /* ── Register Modbus task — owns RS485/Modbus RTU infra ─────────────────── */
+    /* ── Register Modbus task -- owns RS485/Modbus RTU infra ─────────────────── */
     status = App_RegisterModule(&g_modbus_task_module);
     if (status != APP_OK)
     {
@@ -165,7 +165,7 @@ App_Status_t App_RegisterModule(const App_Module_t *module)
 /**
   * @brief  Initialize the application task manager
   * @note   Iterates all previously registered modules and calls their init().
-  *         Does NOT reset the module table — modules registered before this
+  *         Does NOT reset the module table -- modules registered before this
   *         call are preserved.
   * @retval APP_OK on success, APP_ERROR if any module fails
   */
@@ -202,7 +202,7 @@ App_Status_t App_Task_Init(void)
 }
 
 /**
-  * @brief  Main application loop — never returns
+  * @brief  Main application loop -- never returns
   * @note   Calls process() on every registered module each iteration.
   *         Modules execute in registration order (round-robin).
   */
@@ -211,7 +211,7 @@ void App_Task_Loop(void)
     LOG_INFO("FreeRTOS started, entering main loop (%u modules)",
              (unsigned)g_module_count);
 
-    /* Main loop — process all modules forever */
+    /* Main loop -- process all modules forever */
     while (1U)
     {
         for (uint8_t i = 0U; i < g_module_count; i++)
@@ -251,7 +251,7 @@ App_State_t App_GetState(void)
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
-  * @brief  Default task — runs the app module processing loop
+  * @brief  Default task -- runs the app module processing loop
   * @note   Overrides __weak StartDefaultTask in freertos.c.
   *         Calls App_Task_Loop() which never returns.
   */
@@ -262,7 +262,7 @@ void StartDefaultTask(void *argument)
 }
 
 /**
-  * @brief  ETH task — initializes LWIP and TCP SCPI server
+  * @brief  ETH task -- initializes LWIP and TCP SCPI server
   * @note   Overrides __weak StartETHTask in freertos.c.
   */
 void StartETHTask(void *argument)
@@ -279,7 +279,7 @@ void StartETHTask(void *argument)
 }
 
 /**
-  * @brief  Modbus task — runs RS485 RX monitoring loop
+  * @brief  Modbus task -- runs RS485 RX monitoring loop
   * @note   Overrides __weak StartModbusTask in freertos.c.
   */
 void StartModbusTask(void *argument)
@@ -290,7 +290,7 @@ void StartModbusTask(void *argument)
 }
 
 /**
-  * @brief  CAN task — idle loop (CAN is interrupt-driven)
+  * @brief  CAN task -- idle loop (CAN is interrupt-driven)
   * @note   Overrides __weak StartCanTask in freertos.c.
   */
 void StartCanTask(void *argument)

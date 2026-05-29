@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    can_task.c
-  * @brief   CAN task — owns FDCAN1 driver and "can" debug CLI
+  * @brief   CAN task -- owns FDCAN1 driver and "can" debug CLI
   *
   *          Architecture:
   *            - init:    CAN_Init(), registers "can" debug CLI command
@@ -103,7 +103,7 @@ static void _can_task_on_error(App_Status_t err)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "can" command (CAN bus control dispatcher)                    */
+/*  Debug CLI -- "can" command (CAN bus control dispatcher)                    */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 static void _dbg_cmd_can(int argc, char **argv)
@@ -111,8 +111,8 @@ static void _dbg_cmd_can(int argc, char **argv)
     if (argc < 2)
     {
         LOG_INFO("=== CAN Commands ===");
-        LOG_INFO("  can send <id> <hex...>    — send raw CAN frame");
-        LOG_INFO("  can scan [start] [end]    — scan CAN bus");
+        LOG_INFO("  can send <id> <hex...>    -- send raw CAN frame");
+        LOG_INFO("  can scan [start] [end]    -- scan CAN bus");
         return;
     }
 
@@ -131,7 +131,7 @@ static void _dbg_cmd_can(int argc, char **argv)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "can send" command                                             */
+/*  Debug CLI -- "can send" command                                             */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 static void _dbg_cmd_cansend(int argc, char **argv)
@@ -230,7 +230,7 @@ static void _dbg_cmd_cansend(int argc, char **argv)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "can scan" command                                             */
+/*  Debug CLI -- "can scan" command                                             */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 static void _dbg_cmd_canscan(int argc, char **argv)

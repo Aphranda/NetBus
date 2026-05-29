@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    can_task.h
-  * @brief   CAN task — owns FDCAN1 driver initialization and debug CLI
+  * @brief   CAN task -- owns FDCAN1 driver initialization and debug CLI
   *
   *          Responsibilities:
   *            - Initialize CAN driver (FDCAN1)

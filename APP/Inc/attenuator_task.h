@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    attenuator_task.h
-  * @brief   Attenuator task — owns the "att" debug CLI command
+  * @brief   Attenuator task -- owns the "att" debug CLI command
   *
   *          Responsibilities:
   *            - Wrap the IO attenuator API (IO_GetAttenuatorA/B,
@@ -14,11 +14,11 @@
   *            before App_Task_Init().
   *
   *          Debug CLI:
-  *            att a <0-15>   — Set Attenuator A
-  *            att b <0-15>   — Set Attenuator B
-  *            att a get/?    — Get Attenuator A
-  *            att b get/?    — Get Attenuator B
-  *            att get/?      — Get both attenuators
+  *            att a <0-15>   -- Set Attenuator A
+  *            att b <0-15>   -- Set Attenuator B
+  *            att a get/?    -- Get Attenuator A
+  *            att b get/?    -- Get Attenuator B
+  *            att get/?      -- Get both attenuators
   ******************************************************************************
   * @attention
   *

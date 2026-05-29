@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    modbus_config.h
-  * @brief   Modbus RTU Master configuration — user-tunable parameters
+  * @brief   Modbus RTU Master configuration -- user-tunable parameters
   *
   *          Default values are suitable for most RS485 Modbus RTU networks.
   *          Override any define before including this header if needed.

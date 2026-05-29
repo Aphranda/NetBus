@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    modbus_task.h
-  * @brief   Modbus task — owns RS485 and Modbus RTU Master infrastructure
+  * @brief   Modbus task -- owns RS485 and Modbus RTU Master infrastructure
   *
   *          Responsibilities:
   *            - Initialize RS485 driver (UART8 DMA+IDLE)

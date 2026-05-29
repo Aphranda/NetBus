@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file    log_task.c
-  * @brief   Log task implementation — wraps ThirdParty/Log as App_Module_t
+  * @brief   Log task implementation -- wraps ThirdParty/Log as App_Module_t
   *
   *          Registration order matters:
   *            Log_Task must be registered FIRST so that other modules can
@@ -103,7 +103,12 @@ static App_Status_t _log_task_process(void)
         return APP_OK;
     }
 
-    if (SCPI_TryParse(line))
+    /* Known debug commands bypass SCPI to avoid spurious -113 errors */
+    if (Log_DbgIsEnabled() && Log_DbgIsKnownCommand(line))
+    {
+        Log_DbgProcessLine(line);
+    }
+    else if (SCPI_TryParse(line))
     {
         /* SCPI recognized and handled the command */
     }

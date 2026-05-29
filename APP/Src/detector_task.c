@@ -392,7 +392,7 @@ Detector_Status_t Detector_Control(uint8_t node_id, Detector_Mode_t mode,
 {
     uint8_t tx[8] = {
         node_id,
-        1U,  /* Channel — default V channel for basic control; use 0x114 for H */
+        1U,  /* Channel -- default V channel for basic control; use 0x114 for H */
         hold_ms,
         (uint8_t)mode,
         (uint8_t)(threshold & 0xFFU),
@@ -1323,11 +1323,11 @@ static void _print_hex(const char *prefix, const uint8_t *data, uint16_t len)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "detector" command                                              */
+/*  Debug CLI -- "detector" command                                              */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
-  * @brief  'detector' debug CLI command — interactive CAN protocol testing
+  * @brief  'detector' debug CLI command -- interactive CAN protocol testing
   *
   *         Usage:
   *           detector sn <node_id>
@@ -1357,27 +1357,27 @@ static void _dbg_cmd_detector(int argc, char **argv)
     {
         LOG_INFO("Usage: detector <subcmd> [args...]");
         LOG_INFO("Sub-commands:");
-        LOG_INFO("  sn <node_id>                    — Read serial number (0x101)");
-        LOG_INFO("  version <node_id>               — Read firmware version (0x103)");
-        LOG_INFO("  reset <node_id>                 — Reset MCU (0x104)");
-        LOG_INFO("  led <node_id> <0|1> [period]   — LED control (0x105)");
-        LOG_INFO("  nodeid <node_id> <new_id>      — Write Node ID (0x102)");
-        LOG_INFO("  nodeid <node_id> reset          — Reset Node ID to default");
-        LOG_INFO("  control <node> <mode> <hold> <thr> [gate] — Detector cmd (0x110)");
-        LOG_INFO("  stop <node_id>                  — Stop detection (0x112)");
-        LOG_INFO("  switch <node> <s1>..<s6>       — Switch control (0x111)");
-        LOG_INFO("  att <node> <a1>..<a7>          — Attenuator set (0x113)");
-        LOG_INFO("  freq <node> <ch> <khz> [pwr]   — VCO frequency (0x114)");
-        LOG_INFO("  band <node> <mhz> <mode> <mask> — Band select (0x115)");
-        LOG_INFO("  temp <node> [det] [mcu]         — Temperature (0x116)");
-        LOG_INFO("  power <node> <khz> <hold> <mode> <thr> <gate> — Query (0x11B)");
-        LOG_INFO("  txpower <node> <ch> <khz> <dbm100> [gps] [comp] — Tx (0x11C)");
-        LOG_INFO("  flash <node>                    — Flash info (0x117)");
-        LOG_INFO("  readflash <node> <addr> <len>  — Read flash (0x11A)");
-        LOG_INFO("  cal <node> enter|exit          — Calibration mode (0x120/0x121)");
-        LOG_INFO("  ota prepare <node> <maj> <min> <pat> — OTA prepare (0x1A0)");
-        LOG_INFO("  writesn <node> <sn_string>      — Write SN (0x106)");
-        LOG_INFO("  help                            — Show this help");
+        LOG_INFO("  sn <node_id>                    -- Read serial number (0x101)");
+        LOG_INFO("  version <node_id>               -- Read firmware version (0x103)");
+        LOG_INFO("  reset <node_id>                 -- Reset MCU (0x104)");
+        LOG_INFO("  led <node_id> <0|1> [period]   -- LED control (0x105)");
+        LOG_INFO("  nodeid <node_id> <new_id>      -- Write Node ID (0x102)");
+        LOG_INFO("  nodeid <node_id> reset          -- Reset Node ID to default");
+        LOG_INFO("  control <node> <mode> <hold> <thr> [gate] -- Detector cmd (0x110)");
+        LOG_INFO("  stop <node_id>                  -- Stop detection (0x112)");
+        LOG_INFO("  switch <node> <s1>..<s6>       -- Switch control (0x111)");
+        LOG_INFO("  att <node> <a1>..<a7>          -- Attenuator set (0x113)");
+        LOG_INFO("  freq <node> <ch> <khz> [pwr]   -- VCO frequency (0x114)");
+        LOG_INFO("  band <node> <mhz> <mode> <mask> -- Band select (0x115)");
+        LOG_INFO("  temp <node> [det] [mcu]         -- Temperature (0x116)");
+        LOG_INFO("  power <node> <khz> <hold> <mode> <thr> <gate> -- Query (0x11B)");
+        LOG_INFO("  txpower <node> <ch> <khz> <dbm100> [gps] [comp] -- Tx (0x11C)");
+        LOG_INFO("  flash <node>                    -- Flash info (0x117)");
+        LOG_INFO("  readflash <node> <addr> <len>  -- Read flash (0x11A)");
+        LOG_INFO("  cal <node> enter|exit          -- Calibration mode (0x120/0x121)");
+        LOG_INFO("  ota prepare <node> <maj> <min> <pat> -- OTA prepare (0x1A0)");
+        LOG_INFO("  writesn <node> <sn_string>      -- Write SN (0x106)");
+        LOG_INFO("  help                            -- Show this help");
         return;
     }
 

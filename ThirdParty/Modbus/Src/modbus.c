@@ -842,7 +842,7 @@ static Modbus_Result_t _modbus_transaction(const uint8_t *req, uint16_t req_len,
              * Check if we've waited long enough for more bytes. */
             if ((TICK_NOW() - last_byte_tick) >= MODBUS_CHAR_TIMEOUT_MS)
             {
-                /* Frame assembly complete — exit poll loop */
+                /* Frame assembly complete -- exit poll loop */
                 break;
             }
         }
@@ -925,7 +925,7 @@ static Modbus_Result_t _modbus_validate_response(uint8_t slave, uint8_t fc,
     /* ── Function code check ───────────────────────────────────────── */
     if (resp[1] == (uint8_t)(fc | 0x80U))
     {
-        /* Exception response — at least 5 bytes needed */
+        /* Exception response -- at least 5 bytes needed */
         if (resp_len < 5U)
         {
             result.status = MODBUS_ERR_FRAME;
@@ -939,7 +939,7 @@ static Modbus_Result_t _modbus_validate_response(uint8_t slave, uint8_t fc,
 
     if (resp[1] != fc)
     {
-        /* Function code doesn't match — unexpected response */
+        /* Function code doesn't match -- unexpected response */
         result.status = MODBUS_ERR_FRAME;
         return result;
     }
@@ -960,7 +960,7 @@ static Modbus_Result_t _modbus_validate_response(uint8_t slave, uint8_t fc,
 
 /**
   * @brief  Simple microsecond delay (busy-wait)
-  * @note   Approximate — calibrated for STM32H743 @ 400 MHz.
+  * @note   Approximate -- calibrated for STM32H743 @ 400 MHz.
   *         Each iteration is ~10 CPU cycles ≈ 0.025µs.
   *         So for 100µs delay: 100 / 0.025 = 4000 iterations.
   *         We use a simplified approximation: us * 10 = loop iterations

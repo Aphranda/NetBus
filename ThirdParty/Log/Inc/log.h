@@ -76,7 +76,7 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 
 /**
-  * @brief Log macro wrappers — disabled levels produce zero code overhead
+  * @brief Log macro wrappers -- disabled levels produce zero code overhead
   * @note  Usage: LOG_ERROR("Failed to init sensor, err=%d", status);
   */
 #if (LOG_LEVEL >= LOG_LEVEL_ERROR)
@@ -118,7 +118,7 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 
 /**
-  * @brief Debug command callback — receives parsed argc/argv
+  * @brief Debug command callback -- receives parsed argc/argv
   * @param argc  Number of arguments
   * @param argv  Array of argument strings (argv[0] = command name)
   */
@@ -194,6 +194,14 @@ void Log_DbgSetEnabled(uint8_t enable);
 uint8_t Log_DbgIsEnabled(void);
 
 /**
+  * @brief  Check if a command line starts with a registered debug command
+  * @param  line  Null-terminated command line string
+  * @retval 1 if the first token matches a registered debug command
+  * @retval 0 otherwise
+  */
+uint8_t Log_DbgIsKnownCommand(const char *line);
+
+/**
   * @brief  Manually inject a command line for SCPI/debug CLI processing
   * @param  line  Null-terminated command string (e.g. "att a 5")
   * @note   Used by NetSCPI (TCP SCPI) and test harnesses. Pushes the line
@@ -217,7 +225,7 @@ HAL_StatusTypeDef Log_Init(void);
 HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config);
 
 /**
-  * @brief  Core print function — formats message and sends via UART
+  * @brief  Core print function -- formats message and sends via UART
   * @param  level   Log level of the message
   * @param  fmt     printf-style format string
   * @param  ...     Variable arguments for format specifiers
@@ -230,7 +238,7 @@ void Log_Print(uint8_t level, const char *fmt, ...);
   * @param  data  Pointer to data to send
   * @param  len   Number of bytes to send
   * @note   Used by SCPI_Write() to output clean SCPI responses.
-  *         Thread-safe — uses mutex to serialize UART TX.
+  *         Thread-safe -- uses mutex to serialize UART TX.
   */
 void Log_WriteRaw(const char *data, size_t len);
 
