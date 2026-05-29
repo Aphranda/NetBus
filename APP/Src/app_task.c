@@ -37,6 +37,7 @@
 #include "lwip.h"
 #include "net_scpi.h"
 #include "log.h"
+#include "cmsis_os2.h"
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
@@ -209,6 +210,7 @@ void App_Task_Loop(void)
                     }
                 }
             }
+            osDelay(1);  /* Yield to ETH_Task (LWIP) and other lower-priority tasks */
         }
     }
 }
