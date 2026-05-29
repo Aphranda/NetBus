@@ -7,8 +7,9 @@
   *          Output interface: UART7 (PF6-RX, PF7-TX @ 115200 8N1)
   *
   *          Architecture:
-  *            LOG_* macros → Log_Print() → vsnprintf() → HAL_UART_Transmit()
-  *            UART RX DMA + IDLE → line buffer → Log_DbgProcess() → cmd dispatch
+  *            TX: LOG_* macros → Log_Print() → vsnprintf() → HAL_UART_Transmit()
+  *            RX: UART DMA (256B ring) → ISR assembles lines →
+  *                osMessageQueue(4×128B) → Log_DbgGetLine() (task consumer)
   *
   *          Compile-time filtering via LOG_LEVEL eliminates dead code.
   *          Runtime filtering via g_log_config.level skips unwanted output.
@@ -48,11 +49,13 @@ typedef struct {
 /* Private define ------------------------------------------------------------*/
 
 /**
-  * @brief Debug terminal buffer and limits
+  * @brief DMA ring buffer and message queue sizing
   */
-#define LOG_DBG_BUF_SIZE    64U    /*!< Maximum input line length        */
-#define LOG_DBG_MAX_CMDS    10U    /*!< Maximum registered commands      */
-#define LOG_DBG_MAX_ARGS    8U     /*!< Maximum arguments per command    */
+#define LOG_DBG_BUF_SIZE    256U  /*!< DMA RX ring buffer (bytes)        */
+#define LOG_DBG_LINE_LEN    128U  /*!< Max line length in message queue  */
+#define LOG_DBG_QUEUE_SIZE     4  /*!< Message queue capacity (lines)    */
+#define LOG_DBG_MAX_CMDS     10U  /*!< Maximum registered commands       */
+#define LOG_DBG_MAX_ARGS      8U  /*!< Maximum arguments per command     */
 
 /**
   * @brief Level tag strings for human-readable prefix
@@ -89,43 +92,35 @@ static Log_DbgCmdEntry_t g_dbg_cmds[LOG_DBG_MAX_CMDS];
 static uint8_t           g_dbg_cmd_count = 0U;
 
 /**
-  * @brief Debug input buffer and state
+  * @brief Debug CLI state
   */
-static char              g_dbg_buffer[LOG_DBG_BUF_SIZE]; /*!< Line buffer for incoming chars */
-static volatile uint8_t  g_dbg_pos;                       /*!< Current write position        */
-static volatile uint8_t  g_dbg_cmd_pending;               /*!< Flag: complete line ready     */
-static uint8_t           g_dbg_echo = 0U;                 /*!< Echo mode (default: off)      */
-static uint8_t           g_dbg_enabled = 1U;              /*!< Debug CLI fallback (default: on) */
+static uint8_t g_dbg_echo    = 0U;   /*!< Echo mode (default: off)         */
+static uint8_t g_dbg_enabled = 1U;   /*!< Debug CLI fallback (default: on) */
 
 /**
   * @brief Mutex protecting HAL_UART_Transmit from concurrent task access.
-  * @note  Replaces __disable_irq() so that UART RX IDLE interrupts can still
-  *        fire during TX — preventing DMA ring-buffer overrun.
+  * @note  Serializes UART TX without disabling IRQs, so RX IDLE interrupts
+  *        can still fire during TX — preventing DMA ring-buffer overrun.
   */
 static osMutexId_t g_uart_tx_mutex = NULL;
 
 /**
-  * @brief DMA RX ring buffer — receives UART data via DMA in CIRCULAR mode
-  * @note  Accessed by DMA (peripheral) and HAL_UARTEx_RxEventCallback() (CPU).
-  *        DMA continuously writes incoming data to the ring buffer, wrapping
-  *        at the buffer boundary. On each IDLE (or TC) event, the callback
-  *        reads available bytes from g_rb_rd_idx to the current NDTR-derived
-  *        write position, then processes them into the line buffer.
-  *
-  *        No DMA restart is needed — CIRCULAR mode keeps the transfer active.
+  * @brief Message queue — ISR pushes completed lines, task consumer pops them.
+  *        Decouples ISR timing from task processing speed.
   */
-static uint8_t           g_dma_rx_buf[LOG_DBG_BUF_SIZE]; /*!< DMA RX ring buffer          */
-static uint16_t          g_rb_rd_idx;                     /*!< Ring buffer read index [0..BUF_SIZE) */
+static osMessageQueueId_t g_line_queue = NULL;
+
+/**
+  * @brief DMA RX ring buffer — receives UART data via DMA in CIRCULAR mode.
+  *        DMA continuously writes incoming data; IDLE ISR reads and assembles
+  *        lines, pushing them into g_line_queue.
+  */
+static uint8_t  g_dma_rx_buf[LOG_DBG_BUF_SIZE];
+static uint16_t g_rb_rd_idx;            /*!< Ring buffer read index */
 
 /* Private function prototypes -----------------------------------------------*/
 
-/**
-  * @brief  Format and write timestamp prefix into buffer
-  * @param  buf    Output buffer
-  * @param  size   Remaining buffer size
-  * @return Number of characters written (excluding null terminator)
-  */
-static int _log_write_timestamp(char *buf, size_t size);
+static int  _log_write_timestamp(char *buf, size_t size);
 
 /* ── Debug command built-in handlers ──────────────────────────────────────── */
 
@@ -140,8 +135,6 @@ static int  _dbg_tokenize(char *str, char **argv, int max_args);
 
 /**
   * @brief  Initialize log module with defaults (UART7, verbose level, timestamp on)
-  * @note   Call after MX_UART7_Init() in main()
-  * @retval HAL_OK always (UART handle pointer is stored, no HAL ops here)
   */
 HAL_StatusTypeDef Log_Init(void)
 {
@@ -157,9 +150,6 @@ HAL_StatusTypeDef Log_Init(void)
 
 /**
   * @brief  Initialize log module with custom configuration
-  * @param  config  Pointer to Log_Config_t with desired settings
-  * @retval HAL_ERROR if config is NULL or huart is NULL
-  * @retval HAL_OK   on success
   */
 HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config)
 {
@@ -174,18 +164,26 @@ HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config)
     g_log_config.level     = config->level;
     g_log_config.enable_ts = config->enable_ts;
 
-    /* ── Create UART TX mutex if not already created ───────────────────────── */
+    /* ── Create UART TX mutex (one-time) ──────────────────────────────────── */
     if (g_uart_tx_mutex == NULL)
     {
         g_uart_tx_mutex = osMutexNew(NULL);
     }
 
-    /* ── Initialize debug command subsystem ──────────────────────────────── */
+    /* ── Create line message queue (one-time, or re-create if re-init) ────── */
+    if (g_line_queue != NULL)
+    {
+        osMessageQueueDelete(g_line_queue);
+    }
+    g_line_queue = osMessageQueueNew(LOG_DBG_QUEUE_SIZE, LOG_DBG_LINE_LEN, NULL);
+    if (g_line_queue == NULL)
+    {
+        return HAL_ERROR;
+    }
 
-    /* Reset debug buffer and ring buffer read index */
-    g_dbg_pos         = 0U;
-    g_dbg_cmd_pending = 0U;
-    g_dbg_echo        = 0U;  /* Echo off by default */
+    /* ── Initialize debug command subsystem ───────────────────────────────── */
+    g_dbg_echo        = 0U;
+    g_dbg_enabled     = 1U;
     g_rb_rd_idx       = 0U;
 
     /* Clear command table and register built-in commands */
@@ -194,32 +192,25 @@ HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config)
 
     /* Start UART RX via DMA with IDLE line detection (CIRCULAR mode).
      * DMA continuously receives bytes into g_dma_rx_buf ring buffer.
-     * When the UART line goes idle (after a complete line), the IDLE
-     * interrupt fires and HAL_UARTEx_RxEventCallback() processes the
-     * received bytes. DMA keeps running — no restart needed. */
-    if (HAL_UARTEx_ReceiveToIdle_DMA(g_log_config.huart, g_dma_rx_buf, LOG_DBG_BUF_SIZE) != HAL_OK)
+     * HAL_UARTEx_RxEventCallback() assembles lines and pushes them to
+     * g_line_queue. DMA keeps running — no restart needed. */
+    if (HAL_UARTEx_ReceiveToIdle_DMA(g_log_config.huart,
+            g_dma_rx_buf, LOG_DBG_BUF_SIZE) != HAL_OK)
     {
         return HAL_ERROR;
     }
 
-    /* Disable DMA half-transfer interrupt — we only care about IDLE/TC events */
+    /* Disable DMA half-transfer interrupt — only IDLE/TC events matter */
     __HAL_DMA_DISABLE_IT(g_log_config.huart->hdmarx, DMA_IT_HT);
 
-    /* Send an initialization banner to confirm UART is working */
-    Log_Print(LOG_LEVEL_INFO, "Log module initialized (UART7 @ 115200 8N1, DMA+IDLE)");
+    Log_Print(LOG_LEVEL_INFO, "Log module initialized (UART7 @ 115200 8N1, DMA+IDLE, queue)");
     Log_Print(LOG_LEVEL_INFO, "Debug CLI ready — type 'help' for commands");
 
     return HAL_OK;
 }
 
 /**
-  * @brief  Core print function — thread-safe, interrupt-safe formatted output
-  * @param  level  Message log level
-  * @param  fmt    printf-style format string
-  * @param  ...    Variable arguments
-  * @note   If level > current runtime level, the message is silently dropped.
-  *         Uses vsnprintf for safe bounded formatting.
-  *         Temporarily disables interrupts to protect the shared buffer.
+  * @brief  Core print function — formatted output via UART7
   */
 void Log_Print(uint8_t level, const char *fmt, ...)
 {
@@ -227,17 +218,8 @@ void Log_Print(uint8_t level, const char *fmt, ...)
     int     pos = 0;
     va_list args;
 
-    /* Runtime level filtering */
-    if (level > g_log_config.level)
-    {
-        return;
-    }
-
-    /* Guard against null handle (not initialized) */
-    if (g_log_config.huart == NULL)
-    {
-        return;
-    }
+    if (level > g_log_config.level)  return;
+    if (g_log_config.huart == NULL)  return;
 
     /* ── Build prefix: [timestamp] [TAG] ────────────────────────────────── */
     if (g_log_config.enable_ts != 0U)
@@ -245,7 +227,6 @@ void Log_Print(uint8_t level, const char *fmt, ...)
         pos += _log_write_timestamp(&buffer[pos], sizeof(buffer) - (size_t)pos);
     }
 
-    /* Write level tag (only for non-RAW messages) */
     if (level != LOG_LEVEL_NONE && level <= LOG_LEVEL_VERBOSE)
     {
         const char *tag = LOG_TAG[level];
@@ -263,32 +244,22 @@ void Log_Print(uint8_t level, const char *fmt, ...)
         va_end(args);
     }
 
-    /* Ensure null termination */
-    if (pos >= (int)sizeof(buffer))
-    {
-        pos = (int)sizeof(buffer) - 1;
-    }
+    if (pos >= (int)sizeof(buffer)) pos = (int)sizeof(buffer) - 1;
     buffer[pos] = '\0';
 
-    /* ── Transmit via UART ───────────────────────────────────────────────── */
+    /* ── Transmit via UART (mutex-protected, IRQs remain enabled) ────────── */
     if (g_uart_tx_mutex != NULL) osMutexAcquire(g_uart_tx_mutex, osWaitForever);
     HAL_UART_Transmit(g_log_config.huart, (uint8_t *)buffer, (uint16_t)pos, g_log_config.timeout);
     if (g_uart_tx_mutex != NULL) osMutexRelease(g_uart_tx_mutex);
 }
 
 /**
-  * @brief  Write raw data to UART without any prefix, timestamp, or formatting
-  * @param  data  Pointer to data to send
-  * @param  len   Number of bytes to send
-  * @note   Thread-safe — disables IRQ during UART transmit.
-  *         Used by SCPI_Write() for clean SCPI protocol responses.
+  * @brief  Write raw data to UART — no prefix, timestamp, or formatting
+  * @note   Used by SCPI_Write() for clean SCPI protocol responses.
   */
 void Log_WriteRaw(const char *data, size_t len)
 {
-    if (g_log_config.huart == NULL || data == NULL || len == 0U)
-    {
-        return;
-    }
+    if (g_log_config.huart == NULL || data == NULL || len == 0U) return;
 
     if (g_uart_tx_mutex != NULL) osMutexAcquire(g_uart_tx_mutex, osWaitForever);
     HAL_UART_Transmit(g_log_config.huart, (uint8_t *)data, (uint16_t)len, g_log_config.timeout);
@@ -296,31 +267,20 @@ void Log_WriteRaw(const char *data, size_t len)
 }
 
 /**
-  * @brief  Flush log output — wait for UART TX to complete
-  * @note   Currently a no-op since HAL_UART_Transmit is blocking.
-  *         If later switched to DMA/IT mode, this will wait for completion.
+  * @brief  Flush log output — no-op (blocking TX already guarantees completion)
   */
-void Log_Flush(void)
-{
-    /* Blocking HAL_UART_Transmit already guarantees completion.
-     * Reserved for future non-blocking transmission. */
-}
+void Log_Flush(void) {}
 
 /**
   * @brief  Set runtime log level threshold
-  * @param  level  One of LOG_LEVEL_* constants
   */
 void Log_SetLevel(uint8_t level)
 {
-    if (level <= LOG_LEVEL_VERBOSE)
-    {
-        g_log_config.level = level;
-    }
+    if (level <= LOG_LEVEL_VERBOSE) g_log_config.level = level;
 }
 
 /**
   * @brief  Get current runtime log level
-  * @retval Current log level
   */
 uint8_t Log_GetLevel(void)
 {
@@ -330,46 +290,36 @@ uint8_t Log_GetLevel(void)
 /* ── Debug command exported API ───────────────────────────────────────────── */
 
 /**
-  * @brief  Process any pending debug commands from UART RX buffer
-  * @note   Call this periodically from the main loop or task process hook.
-  *         When a complete line (terminated by \r or \n) has been received,
-  *         this function parses and dispatches the command.
+  * @brief  Non-blocking read of one complete line from the RX message queue.
+  * @note   Each line is consumed on read — no separate "consume" step needed.
   */
-void Log_DbgProcess(void)
+uint8_t Log_DbgGetLine(char *buf, uint8_t maxlen)
 {
-    if (g_dbg_cmd_pending == 0U)
+    if (g_line_queue == NULL || buf == NULL || maxlen == 0U) return 0U;
+
+    char line[LOG_DBG_LINE_LEN];
+    if (osMessageQueueGet(g_line_queue, line, NULL, 0U) != osOK)
     {
-        return;
+        return 0U;  /* Queue empty */
     }
 
-    /*
-     * Copy the line into a local buffer INSIDE the critical section
-     * so that the UART7 IDLE interrupt callback cannot overwrite
-     * g_dbg_buffer while we are parsing it.
-     */
-    char buf[LOG_DBG_BUF_SIZE];
-
-    __disable_irq();
-    g_dbg_cmd_pending = 0U;
-    uint8_t len = g_dbg_pos;
-    g_dbg_pos = 0U;
-    memcpy(buf, g_dbg_buffer, len);
+    size_t len = strlen(line);
+    if (len >= (size_t)maxlen) len = (size_t)maxlen - 1U;
+    memcpy(buf, line, len);
     buf[len] = '\0';
-    __enable_irq();
+    return (uint8_t)len;
+}
 
-    /* Parse and execute the local copy (immune to interrupt overwrite) */
-    _dbg_parse_and_execute(buf);
-
-    /* DMA is already running continuously in CIRCULAR mode —
-     * HAL_UARTEx_RxEventCallback() reads from the ring buffer
-     * each time IDLE fires. No restart is needed. */
+/**
+  * @brief  Process a command line through the debug CLI parser.
+  */
+void Log_DbgProcessLine(const char *line)
+{
+    _dbg_parse_and_execute(line);
 }
 
 /**
   * @brief  Register a custom debug command
-  * @param  cmd   Command name string
-  * @param  func  Callback function
-  * @retval HAL_OK on success, HAL_ERROR if table full
   */
 HAL_StatusTypeDef Log_RegisterDbgCmd(const char *cmd, Log_DbgCmdFunc_t func)
 {
@@ -378,22 +328,11 @@ HAL_StatusTypeDef Log_RegisterDbgCmd(const char *cmd, Log_DbgCmdFunc_t func)
 
 /**
   * @brief  Register a custom debug command with help description
-  * @param  cmd   Command name string
-  * @param  func  Callback function
-  * @param  help  One-line description shown by 'help' (NULL = no description)
-  * @retval HAL_OK on success, HAL_ERROR if table full
   */
 HAL_StatusTypeDef Log_RegisterDbgCmdEx(const char *cmd, Log_DbgCmdFunc_t func, const char *help)
 {
-    if (cmd == NULL || func == NULL)
-    {
-        return HAL_ERROR;
-    }
-
-    if (g_dbg_cmd_count >= LOG_DBG_MAX_CMDS)
-    {
-        return HAL_ERROR;
-    }
+    if (cmd == NULL || func == NULL) return HAL_ERROR;
+    if (g_dbg_cmd_count >= LOG_DBG_MAX_CMDS) return HAL_ERROR;
 
     g_dbg_cmds[g_dbg_cmd_count].name = cmd;
     g_dbg_cmds[g_dbg_cmd_count].func = func;
@@ -404,8 +343,7 @@ HAL_StatusTypeDef Log_RegisterDbgCmdEx(const char *cmd, Log_DbgCmdFunc_t func, c
 }
 
 /**
-  * @brief  Enable or disable UART echo for debug terminal
-  * @param  enable  1 = echo on (default), 0 = echo off
+  * @brief  Enable or disable UART echo (deferred to task context, not ISR)
   */
 void Log_DbgSetEcho(uint8_t enable)
 {
@@ -413,71 +351,20 @@ void Log_DbgSetEcho(uint8_t enable)
 }
 
 /**
-  * @brief  Get the number of received characters pending in the debug buffer
-  * @retval Number of characters in buffer (0 = empty)
+  * @brief  Push a line into the message queue for SCPI/debug CLI processing.
+  * @note   Used by NetSCPI (TCP SCPI) and programmatic injection.
   */
-uint8_t Log_DbgAvailable(void)
+void Log_DbgInject(const char *line)
 {
-    return (g_dbg_cmd_pending != 0U) ? g_dbg_pos : 0U;
-}
+    if (g_line_queue == NULL || line == NULL) return;
 
-/**
-  * @brief  Manually inject a debug command string for processing
-  * @param  cmd  Null-terminated command string (e.g. "att a 5")
-  * @note   Copies the command into the internal buffer and processes it
-  *         immediately (or on next Log_DbgProcess call).
-  */
-void Log_DbgInject(const char *cmd)
-{
-    if (cmd == NULL)
-    {
-        return;
-    }
+    char msg[LOG_DBG_LINE_LEN];
+    size_t len = strlen(line);
+    if (len >= LOG_DBG_LINE_LEN) len = LOG_DBG_LINE_LEN - 1U;
+    memcpy(msg, line, len);
+    msg[len] = '\0';
 
-    size_t len = strlen(cmd);
-    if (len >= LOG_DBG_BUF_SIZE)
-    {
-        len = LOG_DBG_BUF_SIZE - 1U;
-    }
-
-    memcpy(g_dbg_buffer, cmd, len);
-    g_dbg_buffer[len] = '\0';
-
-    _dbg_parse_and_execute(g_dbg_buffer);
-}
-
-/**
-  * @brief  Copy the pending debug line into a caller buffer without consuming it
-  * @param  buf     Output buffer
-  * @param  maxlen  Maximum bytes to copy (including null terminator)
-  * @retval Number of bytes copied (0 = no pending command)
-  */
-uint8_t Log_DbgPeekLine(char *buf, uint8_t maxlen)
-{
-    if (g_dbg_cmd_pending == 0U || buf == NULL || maxlen == 0U)
-    {
-        return 0U;
-    }
-
-    __disable_irq();
-    uint8_t len = g_dbg_pos;
-    if (len >= maxlen) len = maxlen - 1U;
-    memcpy(buf, g_dbg_buffer, len);
-    buf[len] = '\0';
-    __enable_irq();
-
-    return len;
-}
-
-/**
-  * @brief  Discard the pending debug line (clear the pending flag)
-  */
-void Log_DbgConsume(void)
-{
-    __disable_irq();
-    g_dbg_cmd_pending = 0U;
-    g_dbg_pos = 0U;
-    __enable_irq();
+    osMessageQueuePut(g_line_queue, msg, 0U, 0U);
 }
 
 /**
@@ -490,7 +377,6 @@ void Log_DbgSetEnabled(uint8_t enable)
 
 /**
   * @brief  Query whether debug CLI fallback is enabled
-  * @retval 1 if debug CLI is active, 0 if SCPI-only
   */
 uint8_t Log_DbgIsEnabled(void)
 {
@@ -501,46 +387,35 @@ uint8_t Log_DbgIsEnabled(void)
 
 /**
   * @brief  Write timestamp "[12345] " into buffer using HAL_GetTick()
-  * @param  buf   Output buffer
-  * @param  size  Remaining size in buffer
-  * @return Number of characters written, not including null terminator
   */
 static int _log_write_timestamp(char *buf, size_t size)
 {
-    int written;
+    if (buf == NULL || size < 4U) return 0;
 
-    if (buf == NULL || size < 4U)
-    {
-        return 0;
-    }
-
-    /* Format: [tick_ms] */
-    written = snprintf(buf, size, "[%lu] ", HAL_GetTick());
-
-    /* Clamp negative return (shouldn't happen with valid buffer) */
+    int written = snprintf(buf, size, "[%lu] ", HAL_GetTick());
     return (written < 0) ? 0 : written;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  HAL UART RX Event callback — ring buffer read via CIRCULAR DMA + IDLE     */
+/*  HAL UART RX Event callback — DMA ring buffer → message queue              */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
   * @brief  UART RX Event callback (HAL weak override)
-  * @note   Called by HAL on IDLE line detection or DMA transfer complete.
-  *         DMA runs in CIRCULAR mode — continuously writing to g_dma_rx_buf.
-  *         This callback reads available bytes from the ring buffer using
-  *         NDTR to compute the current write position, then processes them
-  *         into the debug line buffer. DMA keeps running — no restart needed.
+  * @note   Called by HAL on IDLE line detection or DMA TC.
+  *         Reads bytes from the DMA CIRCULAR ring buffer, assembles them into
+  *         lines using a local static buffer, and pushes completed lines into
+  *         g_line_queue (ISR-safe with timeout=0).
   *
-  *         TC events (DMA wrap): read index resets to avoid re-processing
-  *         old data (already handled by prior IDLE events for CLI use).
-  *
-  * @param  huart  UART handle
-  * @param  Size   Number of bytes in current DMA cycle (not used directly)
+  *         If the queue is full, the oldest line is silently dropped via
+  *         osMessageQueuePut(..., 0) which returns osErrorResource.
+  *         Data stays in the DMA ring buffer and will be picked up on
+  *         subsequent IDLE events.
   */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
+    (void)Size;
+
     /* ── Dispatch UART8 (RS485) to its own handler ─────────────────────── */
     if (huart == &huart8)
     {
@@ -549,163 +424,75 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     }
 
     /* Only process UART7 — the log/debug UART */
-    if (huart != g_log_config.huart)
-    {
-        return;
-    }
+    if (huart != g_log_config.huart) return;
 
-    /* If previous line has not been consumed yet, skip processing.
-     * Data stays in the DMA ring buffer and will be picked up on the
-     * next IDLE event after the pending line is consumed. */
-    if (g_dbg_cmd_pending != 0U)
-    {
-        return;
-    }
+    /* ── Local static line assembly buffer (ISR-private, no concurrent access) */
+    static char line_buf[LOG_DBG_LINE_LEN];
+    static uint8_t line_pos = 0U;
 
-    /* ── Compute DMA write position from NDTR ──────────────────────────── */
-    /* NDTR decrements from LOG_DBG_BUF_SIZE → 0 as DMA fills the buffer.
-     * Write index = (BUF_SIZE - NDTR) gives the current write position.
-     * When NDTR was 0 (TC/wrap), it reloads to BUF_SIZE → wr_idx = 0. */
-    uint16_t ndtr    = (uint16_t)__HAL_DMA_GET_COUNTER(huart->hdmarx);
-    uint16_t wr_idx  = LOG_DBG_BUF_SIZE - ndtr;
+    /* ── Compute DMA write position ──────────────────────────────────────── */
+    uint16_t ndtr   = (uint16_t)__HAL_DMA_GET_COUNTER(huart->hdmarx);
+    uint16_t wr_idx = LOG_DBG_BUF_SIZE - ndtr;
     if (wr_idx >= LOG_DBG_BUF_SIZE) wr_idx = 0U;
 
-    /* ── IDLE event — process available bytes from ring buffer ─────────── */
-    /* Read bytes from g_rb_rd_idx up to wr_idx, handling ring wrap.
-     *
-     * The DMA runs in CIRCULAR mode. On each IDLE event, there may be
-     * data in the ring buffer from g_rb_rd_idx (the last-read position)
-     * up to wr_idx (the current DMA write position). Three cases exist:
-     *
-     *   Case A (no wrap):  g_rb_rd_idx < wr_idx
-     *       Data is contiguous in [g_rb_rd_idx, wr_idx).
-     *
-     *   Case B (wrap):     g_rb_rd_idx > wr_idx
-     *       Data wraps around the buffer boundary:
-     *         Segment 1: [g_rb_rd_idx, LOG_DBG_BUF_SIZE)
-     *         Segment 2: [0, wr_idx)
-     *
-     *   Case C (empty):    g_rb_rd_idx == wr_idx
-     *       No new data — nothing to process.
-     */
-
-    /* --- Determine ring buffer read segments --- */
-    uint16_t seg_start;
-    uint16_t seg_end;
-    int      need_second_seg = 0;
+    /* ── Process bytes from ring buffer ──────────────────────────────────── */
+    /* Handle both contiguous (rd < wr) and wrap (rd > wr) cases */
+    uint16_t seg_start, seg_end;
+    int      second_seg = 0;
 
     if (g_rb_rd_idx < wr_idx)
     {
-        /* Case A: single contiguous segment */
         seg_start = g_rb_rd_idx;
         seg_end   = wr_idx;
     }
     else if (g_rb_rd_idx > wr_idx)
     {
-        /* Case B: two segments due to wrap */
-        seg_start       = g_rb_rd_idx;
-        seg_end         = LOG_DBG_BUF_SIZE;
-        need_second_seg = 1;
+        seg_start = g_rb_rd_idx;
+        seg_end   = LOG_DBG_BUF_SIZE;
+        second_seg = 1;
     }
     else
     {
-        /* Case C: no new data */
-        goto _ringbuf_done;
+        return;  /* No new data */
     }
 
-    /* --- Process first segment --- */
+    for (int seg = 0; seg <= second_seg; seg++)
     {
-        uint16_t i = seg_start;
-
-        while (i < seg_end)
+        uint16_t seg_len = (seg == 0) ? (seg_end - seg_start) : wr_idx;
+        for (uint16_t j = 0U; j < seg_len; j++)
         {
-            uint8_t ch = g_dma_rx_buf[i];
-            g_rb_rd_idx = i + 1U;  /* Keep rd_idx in sync even on break */
+            uint8_t ch = g_dma_rx_buf[(seg == 0) ? (seg_start + j) : j];
 
-            /* ── Handle Backspace (0x7F / 0x08) ─────────────────────── */
-            if (ch == 0x7FU || ch == 0x08U)
+            if (ch == 0x7FU || ch == 0x08U)  /* Backspace */
             {
-                if (g_dbg_pos > 0U)
-                {
-                    g_dbg_pos--;
-                }
-                i++;
+                if (line_pos > 0U) line_pos--;
                 continue;
             }
 
-            /* ── Handle End-of-Line: \n or \r ───────────────────────── */
             if (ch == '\n' || ch == '\r')
             {
-                if (g_dbg_pos > 0U)
+                if (line_pos > 0U)
                 {
-                    g_dbg_cmd_pending = 1U;
-                    goto _ringbuf_done;
+                    line_buf[line_pos] = '\0';
+                    line_pos = 0U;
+                    /* Push to queue — drop if full (timeout=0, non-blocking) */
+                    osMessageQueuePut(g_line_queue, line_buf, 0U, 0U);
                 }
-                i++;
                 continue;
             }
 
-            /* ── Handle printable characters ────────────────────────── */
-            if (ch >= 0x20U && ch <= 0x7EU)
+            /* Printable characters */
+            if (ch >= 0x20U && ch <= 0x7EU && line_pos < (LOG_DBG_LINE_LEN - 1U))
             {
-                if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
-                {
-                    g_dbg_buffer[g_dbg_pos++] = (char)ch;
-                }
-            }
-
-            i++;
-        }
-
-        /* --- Process wrap-around segment (if needed) --- */
-        if (need_second_seg)
-        {
-            i = 0U;
-            while (i < wr_idx)
-            {
-                uint8_t ch = g_dma_rx_buf[i];
-                g_rb_rd_idx = i + 1U;
-
-                /* ── Handle Backspace (0x7F / 0x08) ─────────────────── */
-                if (ch == 0x7FU || ch == 0x08U)
-                {
-                    if (g_dbg_pos > 0U)
-                    {
-                        g_dbg_pos--;
-                    }
-                    i++;
-                    continue;
-                }
-
-                /* ── Handle End-of-Line: \n or \r ───────────────────── */
-                if (ch == '\n' || ch == '\r')
-                {
-                    if (g_dbg_pos > 0U)
-                    {
-                        g_dbg_cmd_pending = 1U;
-                        goto _ringbuf_done;
-                    }
-                    i++;
-                    continue;
-                }
-
-                /* ── Handle printable characters ────────────────────── */
-                if (ch >= 0x20U && ch <= 0x7EU)
-                {
-                    if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
-                    {
-                        g_dbg_buffer[g_dbg_pos++] = (char)ch;
-                    }
-                }
-
-                i++;
+                line_buf[line_pos++] = (char)ch;
             }
         }
+
+        if (seg == 0) seg_start = 0U;  /* Prepare for second segment */
     }
 
-_ringbuf_done:
-    /* DMA runs continuously in CIRCULAR mode — no restart needed here.
-     * __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT) was done once in init. */
+    /* Update read index to current DMA position */
+    g_rb_rd_idx = wr_idx;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -741,10 +528,6 @@ static void _dbg_cmd_help(int argc, char **argv)
 
 /**
   * @brief  Tokenize a string into an argv-style array (in-place, modifies str)
-  * @param  str      Null-terminated input string (will be modified)
-  * @param  argv     Output array of string pointers
-  * @param  max_args Maximum number of tokens to extract
-  * @return Number of tokens found
   */
 static int _dbg_tokenize(char *str, char **argv, int max_args)
 {
@@ -753,31 +536,14 @@ static int _dbg_tokenize(char *str, char **argv, int max_args)
 
     while (*p != '\0' && argc < max_args)
     {
-        /* Skip leading whitespace */
-        while (*p == ' ' || *p == '\t')
-        {
-            p++;
-        }
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '\0') break;
 
-        if (*p == '\0')
-        {
-            break;
-        }
-
-        /* Start of token */
         argv[argc++] = p;
 
-        /* Skip to next whitespace or end */
-        while (*p != '\0' && *p != ' ' && *p != '\t')
-        {
-            p++;
-        }
+        while (*p != '\0' && *p != ' ' && *p != '\t') p++;
 
-        if (*p != '\0')
-        {
-            *p = '\0'; /* Terminate token */
-            p++;
-        }
+        if (*p != '\0') { *p = '\0'; p++; }
     }
 
     return argc;
@@ -785,47 +551,28 @@ static int _dbg_tokenize(char *str, char **argv, int max_args)
 
 /**
   * @brief  Parse a command line and dispatch to registered handler
-  * @param  line  Null-terminated command line string
-  * @note   Strips trailing newline/carriage-return characters.
-  *         Empty lines and comment lines (starting with '#') are ignored.
   */
 static void _dbg_parse_and_execute(const char *line)
 {
-    if (line == NULL || *line == '\0')
-    {
-        return;
-    }
+    if (line == NULL || *line == '\0') return;
 
-    /* Make a mutable copy */
-    char buf[LOG_DBG_BUF_SIZE];
+    char buf[LOG_DBG_LINE_LEN];
     size_t len = strlen(line);
-    if (len >= LOG_DBG_BUF_SIZE)
-    {
-        len = LOG_DBG_BUF_SIZE - 1U;
-    }
+    if (len >= LOG_DBG_LINE_LEN) len = LOG_DBG_LINE_LEN - 1U;
     memcpy(buf, line, len);
     buf[len] = '\0';
 
     /* Strip trailing \r \n */
     while (len > 0U && (buf[len - 1U] == '\r' || buf[len - 1U] == '\n'))
-    {
         buf[--len] = '\0';
-    }
 
-    /* Skip empty lines and comments */
-    if (len == 0U || buf[0] == '#')
-    {
-        return;
-    }
+    if (len == 0U || buf[0] == '#') return;
 
     /* Tokenize */
     char *argv[LOG_DBG_MAX_ARGS];
     int argc = _dbg_tokenize(buf, argv, LOG_DBG_MAX_ARGS);
 
-    if (argc < 1)
-    {
-        return;
-    }
+    if (argc < 1) return;
 
     /* Look up command in registered table */
     for (uint8_t i = 0U; i < g_dbg_cmd_count; i++)
@@ -837,6 +584,5 @@ static void _dbg_parse_and_execute(const char *line)
         }
     }
 
-    /* Command not found */
     Log_Print(LOG_LEVEL_INFO, "Unknown command: '%s'. Type 'help' for available commands.", argv[0]);
 }

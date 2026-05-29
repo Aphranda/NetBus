@@ -4,6 +4,10 @@
   * @file    log.h
   * @brief   Log module header - UART7-based logging with level filtering
   *          Output interface: UART7 (PF6-RX, PF7-TX) @ 115200 8N1
+  *
+  *          UART RX architecture:
+  *            DMA (256B ring) → ISR assembles lines → osMessageQueue(4×128B)
+  *            → task consumer via Log_DbgGetLine()
   ******************************************************************************
   * @attention
   *
@@ -133,12 +137,21 @@ typedef struct {
 /* Exported functions --------------------------------------------------------*/
 
 /**
-  * @brief  Process any pending debug commands from UART RX
-  * @note   Call this periodically from the main loop or task process hook.
-  *         Parses received line, matches against registered commands,
+  * @brief  Non-blocking read of one complete line from the UART RX message queue.
+  * @param  buf     Output buffer
+  * @param  maxlen  Maximum bytes to copy (including null terminator)
+  * @retval Number of bytes copied (0 = queue empty, no line available)
+  * @note   Replaces Log_DbgPeekLine/Log_DbgConsume. Each line is consumed on read.
+  */
+uint8_t Log_DbgGetLine(char *buf, uint8_t maxlen);
+
+/**
+  * @brief  Process a command line through the debug CLI parser.
+  * @param  line  Null-terminated command line string
+  * @note   Parses the line, matches against registered debug commands,
   *         and invokes the corresponding callback.
   */
-void Log_DbgProcess(void);
+void Log_DbgProcessLine(const char *line);
 
 /**
   * @brief  Register a custom debug command
@@ -163,36 +176,14 @@ HAL_StatusTypeDef Log_RegisterDbgCmdEx(const char *cmd, Log_DbgCmdFunc_t func, c
 
 /**
   * @brief  Enable or disable UART echo for debug terminal
-  * @param  enable  1 = echo on (default), 0 = echo off
+  * @param  enable  1 = echo on, 0 = echo off
+  * @note   Echo is deferred to task context; no ISR-side TX.
   */
 void Log_DbgSetEcho(uint8_t enable);
 
 /**
-  * @brief  Get the number of received characters pending in the debug buffer
-  * @retval Number of characters in buffer (0 = empty)
-  */
-uint8_t Log_DbgAvailable(void);
-
-/**
-  * @brief  Copy the pending debug command line into a caller buffer without consuming it
-  * @param  buf     Output buffer
-  * @param  maxlen  Maximum bytes to copy (including null terminator)
-  * @retval Number of bytes copied (0 = no pending command)
-  */
-uint8_t Log_DbgPeekLine(char *buf, uint8_t maxlen);
-
-/**
-  * @brief  Discard the pending debug command line (clear the pending flag)
-  * @note   Use after a pre-filter has handled the command to prevent Log_DbgProcess()
-  *         from re-processing it.
-  */
-void Log_DbgConsume(void);
-
-/**
   * @brief  Enable or disable debug CLI fallback mode
   * @param  enable  1 = debug CLI active, 0 = SCPI-only mode
-  * @note   When debug CLI is disabled, unrecognized SCPI commands return an error
-  *         rather than attempting debug CLI interpretation.
   */
 void Log_DbgSetEnabled(uint8_t enable);
 
@@ -203,13 +194,12 @@ void Log_DbgSetEnabled(uint8_t enable);
 uint8_t Log_DbgIsEnabled(void);
 
 /**
-  * @brief  Manually inject a debug command string for processing
-  * @param  cmd  Null-terminated command string (e.g. "att a 5")
-  * @note   Useful for programmatic command injection or testing.
-  *         The string is copied into the internal buffer and processed
-  *         on the next Log_DbgProcess() call.
+  * @brief  Manually inject a command line for SCPI/debug CLI processing
+  * @param  line  Null-terminated command string (e.g. "att a 5")
+  * @note   Used by NetSCPI (TCP SCPI) and test harnesses. Pushes the line
+  *         directly into the message queue for consumption by the main loop.
   */
-void Log_DbgInject(const char *cmd);
+void Log_DbgInject(const char *line);
 
 
 /**
@@ -240,7 +230,7 @@ void Log_Print(uint8_t level, const char *fmt, ...);
   * @param  data  Pointer to data to send
   * @param  len   Number of bytes to send
   * @note   Used by SCPI_Write() to output clean SCPI responses.
-  *         Thread-safe — disables IRQ during UART transmit.
+  *         Thread-safe — uses mutex to serialize UART TX.
   */
 void Log_WriteRaw(const char *data, size_t len);
 

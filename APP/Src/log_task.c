@@ -197,23 +197,19 @@ static App_Status_t _log_task_init(void)
 /**
   * @brief  Log task periodic process — SCPI-first, debug CLI fallback
   * @note   Priority: SCPI parser → debug CLI (if DIAG:DEBUG ON)
-  *         Call this periodically from the main loop.
+  *         Pulls lines from the ISR-fed message queue (non-blocking).
   * @retval APP_OK
   */
 static App_Status_t _log_task_process(void)
 {
-    /* Check for pending command line from UART7 DMA RX */
+    /* Non-blocking dequeue from the ISR-fed message queue */
     char line[256];
-    uint8_t len = Log_DbgPeekLine(line, sizeof(line) - 1);
+    uint8_t len = Log_DbgGetLine(line, sizeof(line) - 1);
 
     if (len == 0U)
     {
         return APP_OK;
     }
-
-    /* Consume immediately — prevents IDLE IRQ from corrupting the buffer
-     * while we parse (SCPI_TryParse runs with IRQs enabled). */
-    Log_DbgConsume();
 
     /* Try SCPI parser first */
     if (SCPI_TryParse(line))
@@ -223,7 +219,7 @@ static App_Status_t _log_task_process(void)
     else if (Log_DbgIsEnabled())
     {
         /* SCPI didn't recognize it — fall back to debug CLI */
-        Log_DbgInject(line);
+        Log_DbgProcessLine(line);
     }
 
     return APP_OK;

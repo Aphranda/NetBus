@@ -62,6 +62,23 @@ const osThreadAttr_t ETH_Task_attributes = {
   .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for Modbus_Task */
+osThreadId_t Modbus_TaskHandle;
+const osThreadAttr_t Modbus_Task_attributes = {
+  .name = "Modbus_Task",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for SCPI_Mutex */
+osMutexId_t SCPI_MutexHandle;
+const osMutexAttr_t SCPI_Mutex_attributes = {
+  .name = "SCPI_Mutex"
+};
+/* Definitions for Modbus_Mutex */
+osMutexId_t Modbus_MutexHandle;
+const osMutexAttr_t Modbus_Mutex_attributes = {
+  .name = "Modbus_Mutex"
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -70,6 +87,7 @@ const osThreadAttr_t ETH_Task_attributes = {
 
 void StartDefaultTask(void *argument);
 void StartETHTask(void *argument);
+void StartModbusTask(void *argument);
 
 extern void MX_LWIP_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -83,6 +101,12 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
+  /* Create the mutex(es) */
+  /* creation of SCPI_Mutex */
+  SCPI_MutexHandle = osMutexNew(&SCPI_Mutex_attributes);
+
+  /* creation of Modbus_Mutex */
+  Modbus_MutexHandle = osMutexNew(&Modbus_Mutex_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -106,6 +130,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of ETH_Task */
   ETH_TaskHandle = osThreadNew(StartETHTask, NULL, &ETH_Task_attributes);
+
+  /* creation of Modbus_Task */
+  Modbus_TaskHandle = osThreadNew(StartModbusTask, NULL, &Modbus_Task_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -153,6 +180,24 @@ __weak void StartETHTask(void *argument)
     osDelay(1);
   }
   /* USER CODE END StartETHTask */
+}
+
+/* USER CODE BEGIN Header_StartModbusTask */
+/**
+* @brief Function implementing the Modbus_Task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartModbusTask */
+__weak void StartModbusTask(void *argument)
+{
+  /* USER CODE BEGIN StartModbusTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartModbusTask */
 }
 
 /* Private application code --------------------------------------------------*/
