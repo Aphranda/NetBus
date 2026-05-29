@@ -34,6 +34,9 @@
 #include "attenuator_task.h"
 #include "rfsw_task.h"
 #include "detector_task.h"
+#include "lwip.h"
+#include "net_scpi.h"
+#include "log.h"
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
@@ -219,4 +222,37 @@ void App_Task_Loop(void)
 App_State_t App_GetState(void)
 {
     return g_app_state;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  FreeRTOS Task Overrides                                                   */
+/*  Override the __weak stubs in freertos.c (CubeMX-generated)                */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+  * @brief  Default task — runs the app module processing loop
+  * @note   Overrides __weak StartDefaultTask in freertos.c.
+  *         Calls App_Task_Loop() which never returns.
+  */
+void StartDefaultTask(void *argument)
+{
+    (void)argument;
+    App_Task_Loop();
+}
+
+/**
+  * @brief  ETH task — initializes LWIP and TCP SCPI server
+  * @note   Overrides __weak StartETHTask in freertos.c.
+  */
+void StartETHTask(void *argument)
+{
+    (void)argument;
+    MX_LWIP_Init();
+    LOG_INFO("LWIP init done, starting SCPI server");
+    NetSCPI_Init();
+
+    for (;;)
+    {
+        osDelay(1000);
+    }
 }

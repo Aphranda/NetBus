@@ -128,7 +128,10 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  App_Task_Loop();  /* Never returns */
+  while (1)
+  {
+    osDelay(1000);
+  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

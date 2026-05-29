@@ -1,61 +1,61 @@
 # NetBus 控制功能测试报告
 
-**生成时间**: 2026-05-21 09:46:35  
-**测试端口**: COM8 @ 115200 bps  
-**测试模式**: all (Modbus addr=1, CAN node=1)  
-**安全策略**: 仅读取/查询/控制，不修改从机或主机配置  
+**生成时间**: 2026-05-21 09:46:35
+**测试端口**: COM8 @ 115200 bps
+**测试模式**: all (Modbus addr=1, CAN node=1)
+**安全策略**: 仅读取/查询/控制，不修改从机或主机配置
 
 ---
 
 ## 测试摘要
 
-| 指标 | 值 |
-|------|----|
-| 总测试项 | 24 |
-| PASS | 24 |
-| FAIL | 0 |
-| WARN | 0 |
-| SKIP | 0 |
-| 通过率 | 100.0% |
-| 总耗时 | 6.1s |
+| 指标     | 值     |
+| -------- | ------ |
+| 总测试项 | 24     |
+| PASS     | 24     |
+| FAIL     | 0      |
+| WARN     | 0      |
+| SKIP     | 0      |
+| 通过率   | 100.0% |
+| 总耗时   | 6.1s   |
 
 ### 子系统结果
 
-| 子系统 | 命令 | 通过 | 说明 |
-|--------|------|------|------|
-| CLI 基础 | help, att | 10 | 本地衰减器 & 帮助 |
-| RFSW (Modbus) | rfsw | 7 | RS485 远程 RF Switch |
-| CAN 总线 | cansn, canscan | 2 | CAN 扫描 & SN 查询 |
-| Detector (CAN) | detector | 5 | A1 检波板指令 |
+| 子系统         | 命令           | 通过 | 说明                 |
+| -------------- | -------------- | ---- | -------------------- |
+| CLI 基础       | help, att      | 10   | 本地衰减器 & 帮助    |
+| RFSW (Modbus)  | rfsw           | 7    | RS485 远程 RF Switch |
+| CAN 总线       | cansn, canscan | 2    | CAN 扫描 & SN 查询   |
+| Detector (CAN) | detector       | 5    | A1 检波板指令        |
 
 ## 测试明细
 
-| # | 测试项 | 状态 | 耗时 | 详情 |
-|---|--------|------|------|------|
-| 1 | help - 帮助信息 | PASS | 1174ms | 命令列表已返回 |
-| 2 | att (无参数) | PASS | 230ms | 衰减器用法说明 |
-| 3 | att - 读取两路衰减器 | PASS | 216ms | 读取两路衰减器 OK |
-| 4 | att - 读取衰减器A | PASS | 220ms | 读取衰减器A OK |
-| 5 | att - 读取衰减器B | PASS | 219ms | 读取衰减器B OK |
-| 6 | att - 读取当前值 | PASS | 0ms | 基准值 |
-| 7 | att - A<-5 | PASS | 215ms | 设置成功 |
-| 8 | att - B<-10 | PASS | 220ms | 设置成功 |
-| 9 | att - 验证设置 | PASS | 0ms | A=5, B=10 验证通过 |
-| 10 | att - 恢复原始值 | PASS | 0ms | 衰减器已恢复 |
-| 11 | rfsw - 帮助 | PASS | 330ms | rfsw 命令帮助 |
-| 12 | rfsw get 1 - 读取通道号 | PASS | 221ms | 通道号读取成功 |
-| 13 | rfsw info 1 - 设备信息 | PASS | 251ms | 设备信息读取成功 |
-| 14 | rfsw status 1 - 设备状态 | PASS | 218ms | 读取完成 |
-| 15 | rfsw outputs 1 - 读取输出线圈 | PASS | 226ms | 读取完成 |
-| 16 | rfsw inputs 1 - 读取离散输入 | PASS | 218ms | 读取完成 |
-| 17 | rfsw mode 1 - 读取工作模式 | PASS | 214ms | 模式读取成功 |
-| 18 | canscan - CAN 总线扫描 | PASS | 325ms | 扫描完成 |
-| 19 | cansn 1 - 检波板 SN 查询 | PASS | 463ms | SN 查询成功 |
-| 20 | detector help - 检波器帮助 | PASS | 219ms | detector 子命令列表 |
-| 21 | detector sn 1 - 检波板 SN | PASS | 218ms | SN 查询成功 |
-| 22 | detector version 1 - 固件版本 | PASS | 218ms | 版本查询已发送 |
-| 23 | detector temp 1 - 温度 | PASS | 219ms | 温度查询已发送 |
-| 24 | detector flash 1 - Flash 信息 | PASS | 234ms | Flash 信息查询已发送 |
+| #  | 测试项                        | 状态 | 耗时   | 详情                 |
+| -- | ----------------------------- | ---- | ------ | -------------------- |
+| 1  | help - 帮助信息               | PASS | 1174ms | 命令列表已返回       |
+| 2  | att (无参数)                  | PASS | 230ms  | 衰减器用法说明       |
+| 3  | att - 读取两路衰减器          | PASS | 216ms  | 读取两路衰减器 OK    |
+| 4  | att - 读取衰减器A             | PASS | 220ms  | 读取衰减器A OK       |
+| 5  | att - 读取衰减器B             | PASS | 219ms  | 读取衰减器B OK       |
+| 6  | att - 读取当前值              | PASS | 0ms    | 基准值               |
+| 7  | att - A<-5                    | PASS | 215ms  | 设置成功             |
+| 8  | att - B<-10                   | PASS | 220ms  | 设置成功             |
+| 9  | att - 验证设置                | PASS | 0ms    | A=5, B=10 验证通过   |
+| 10 | att - 恢复原始值              | PASS | 0ms    | 衰减器已恢复         |
+| 11 | rfsw - 帮助                   | PASS | 330ms  | rfsw 命令帮助        |
+| 12 | rfsw get 1 - 读取通道号       | PASS | 221ms  | 通道号读取成功       |
+| 13 | rfsw info 1 - 设备信息        | PASS | 251ms  | 设备信息读取成功     |
+| 14 | rfsw status 1 - 设备状态      | PASS | 218ms  | 读取完成             |
+| 15 | rfsw outputs 1 - 读取输出线圈 | PASS | 226ms  | 读取完成             |
+| 16 | rfsw inputs 1 - 读取离散输入  | PASS | 218ms  | 读取完成             |
+| 17 | rfsw mode 1 - 读取工作模式    | PASS | 214ms  | 模式读取成功         |
+| 18 | canscan - CAN 总线扫描        | PASS | 325ms  | 扫描完成             |
+| 19 | cansn 1 - 检波板 SN 查询      | PASS | 463ms  | SN 查询成功          |
+| 20 | detector help - 检波器帮助    | PASS | 219ms  | detector 子命令列表  |
+| 21 | detector sn 1 - 检波板 SN     | PASS | 218ms  | SN 查询成功          |
+| 22 | detector version 1 - 固件版本 | PASS | 218ms  | 版本查询已发送       |
+| 23 | detector temp 1 - 温度        | PASS | 219ms  | 温度查询已发送       |
+| 24 | detector flash 1 - Flash 信息 | PASS | 234ms  | Flash 信息查询已发送 |
 
 ## 附录: 完整响应数据
 
@@ -66,6 +66,7 @@
 
 - **请求**: `help`
 - **响应**:
+
 ```
 [1514323] [INFO] === Debug CLI Commands ===[1514324] [INFO]   help[1514325] [INFO]   cansn[1514327] [INFO]   cansend[1514328] [INFO]   canscan[1514329] [INFO]   att[1514330] [INFO]   rfsw[1514331] [INFO]   detector[1514332] [INFO] ==========================
 ```
@@ -74,6 +75,7 @@
 
 - **请求**: `att`
 - **响应**:
+
 ```
 [1515485] [INFO] Usage:
 [1515486] [INFO]   att a <0-15>    Set Attenuator A
@@ -87,6 +89,7 @@
 
 - **请求**: `att ?`
 - **响应**:
+
 ```
 [1515697] [INFO] Attenuator A = 0  (0x0)
 [1515698] [INFO] Attenuator B = 0  (0x0)
@@ -96,6 +99,7 @@
 
 - **请求**: `att a ?`
 - **响应**:
+
 ```
 [1515908] [INFO] Attenuator A = 0  (0x0)
 ```
@@ -104,6 +108,7 @@
 
 - **请求**: `att b ?`
 - **响应**:
+
 ```
 [1516125] [INFO] Attenuator B = 0  (0x0)
 ```
@@ -112,6 +117,7 @@
 
 - **请求**: `att a ? / att b ?`
 - **响应**:
+
 ```
 A=0, B=0
 ```
@@ -120,6 +126,7 @@ A=0, B=0
 
 - **请求**: `att a 5`
 - **响应**:
+
 ```
 [1516775] [INFO] Attenuator A set to 5
 ```
@@ -128,6 +135,7 @@ A=0, B=0
 
 - **请求**: `att b 10`
 - **响应**:
+
 ```
 [1516988] [INFO] Attenuator B set to 10
 ```
@@ -136,6 +144,7 @@ A=0, B=0
 
 - **请求**: `att a ? / att b ?`
 - **响应**:
+
 ```
 A: [1517305] [INFO] Attenuator A = 5  (0x5)
 B: [1517514] [INFO] Attenuator B = 10  (0xA)
@@ -145,6 +154,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `att a 0 / att b 0`
 - **响应**:
+
 ```
 已恢复 A=0, B=0
 ```
@@ -153,6 +163,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `rfsw`
 - **响应**:
+
 ```
 [1518159] [INFO] RF Switch Control Commands (SP10T via Modbus RTU):
 [1518160] [INFO]   rfsw get <addr>              ��� Read current channel
@@ -176,6 +187,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `rfsw get 1`
 - **响应**:
+
 ```
 [1518419] [INFO] RFSW[1]: channel = 1
 ```
@@ -184,6 +196,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `rfsw info 1`
 - **响应**:
+
 ```
 [1518651] [INFO] ������ RFSW[1] Device Info ������������������������������������������������������������������
 [1518652] [INFO]   Name:        'PPA-SP10'
@@ -202,6 +215,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `rfsw status 1`
 - **响应**:
+
 ```
 [1518845] [INFO] RFSW[1]: status = 0x5400
 [1518846] [INFO]   Init done:  NO
@@ -212,6 +226,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `rfsw outputs 1`
 - **响应**:
+
 ```
 [1519056] [INFO] RFSW[1] output coils:
 [1519057] [INFO]   [0] S0_CA = OFF
@@ -226,6 +241,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `rfsw inputs 1`
 - **响应**:
+
 ```
 [1519269] [INFO] RFSW[1] discrete inputs:
 [1519270] [INFO]   CTRL1 = LOW
@@ -238,6 +254,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `rfsw mode 1`
 - **响应**:
+
 ```
 [1519477] [INFO] RFSW[1]: mode = IO DIRECT (0)
 ```
@@ -246,6 +263,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `canscan`
 - **响应**:
+
 ```
 [1519676] [INFO] CAN Scan: scanning nodes 1-40 (40 nodes) ...
 [1519677] [INFO] CAN Scan: sending queries (ID=0x101, DLC=1) for nodes 1-40 ...
@@ -285,7 +303,8 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 [1519718] [INFO] CAN Scan TX (1 bytes): 22
 [1519719] [INFO] CAN Scan TX23
 [1519720] [INFO] C (1 bytes): 24
-[1519721] Scan TX (1 19722] [INFO] CAN Scan TX (1 b
+[1519721] Scan TX (1 
+19722] [INFO] CAN Scan TX (1 b
 9723] [INFO] CAN Sces): 27
 [1CAN Scan TX (1 byte[1519727] [can: sent 40 queries in[151728] [INFO] CAN Scan:  for responses)..[1519729] [INFO]   NOUND, SN='PINPR0000' (len=18)
 ```
@@ -294,6 +313,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `cansn 1`
 - **响应**:
+
 ```
 [1520228] [INFO] CAN Scan: scan complete, 1 node(s) found
 [1520229] [INFO] CAN eryinrom node 1 ...
@@ -307,6 +327,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `detector help`
 - **响应**:
+
 ```
 [1520304] [INFO] Available sub-commands:
 [1520305] [INFO]   sn, version, reset, led, nodeid, control, stop, switch
@@ -319,6 +340,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `detector sn 1`
 - **响应**:
+
 ```
 [1520508] [INFO] Node 1 SN: 'PINPRFB00300000038' (len=18)
 ```
@@ -327,6 +349,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `detector version 1`
 - **响应**:
+
 ```
 [1520723] [INFO] Node 1 version: 3.1.21
 ```
@@ -335,6 +358,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `detector temp 1 1 1`
 - **响应**:
+
 ```
 [1520938] [INFO] Node 1 temp: det=-25592, mcu=-23799, rsv=0
 ```
@@ -343,6 +367,7 @@ B: [1517514] [INFO] Attenuator B = 10  (0xA)
 
 - **请求**: `detector flash 1`
 - **响应**:
+
 ```
 [1521154] [INFO] Node 1 Flash Info:
 [1521155] [INFO]   JEDEC ID: 0x1540EF, Status: 0x00
