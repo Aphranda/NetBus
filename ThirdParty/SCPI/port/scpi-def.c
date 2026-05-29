@@ -27,6 +27,7 @@
 #include "can.h"
 #include "modbus.h"
 #include "detector_task.h"
+#include "storage_task.h"
 #include "log.h"
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -82,7 +83,23 @@ scpi_result_t SCPI_CoreCls(scpi_t *context)
 
 scpi_result_t SCPI_CoreIdnQ(scpi_t *context)
 {
-    _write(context, "%s,%s,%s,%s", SCPI_IDN1, SCPI_IDN2, SCPI_IDN3, SCPI_IDN4);
+    /* Read identity from flash storage, fall back to compile-time defaults.
+       Use small buffers to fit within defaultTask's 2KB stack. */
+    char buf1[32], buf2[32];
+    const char *mfr = SCPI_IDN1, *model = SCPI_IDN2;
+    const char *sn = SCPI_IDN3,  *ver   = SCPI_IDN4;
+    uint16_t len;
+
+    if (Storage_Get("cfg.mfr", NULL, buf1, &len) == APP_OK && len > 0U)
+    { buf1[len < 31U ? len : 31U] = '\0'; mfr = buf1; }
+    if (Storage_Get("cfg.model", NULL, buf2, &len) == APP_OK && len > 0U)
+    { buf2[len < 31U ? len : 31U] = '\0'; model = buf2; }
+    if (Storage_Get("cfg.sn", NULL, buf1, &len) == APP_OK && len > 0U)
+    { buf1[len < 31U ? len : 31U] = '\0'; sn = buf1; }
+    if (Storage_Get("cfg.ver", NULL, buf2, &len) == APP_OK && len > 0U)
+    { buf2[len < 31U ? len : 31U] = '\0'; ver = buf2; }
+
+    _write(context, "%s,%s,%s,%s", mfr, model, sn, ver);
     return SCPI_RES_OK;
 }
 
@@ -969,6 +986,254 @@ scpi_result_t SCPI_RouteSwitchAddress(scpi_t *context)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
+/*  SYSTem:CONFigure — device identity stored in flash                         */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+  * @brief  Helper: get a stored config string, fall back to default
+  */
+static void _cfg_get_str(const char *key, const char *def, char *out, size_t size)
+{
+    uint16_t len = 0;
+    if (Storage_Get(key, NULL, out, &len) != APP_OK || len == 0U)
+    {
+        strncpy(out, def, size - 1U);
+        out[size - 1U] = '\0';
+    }
+    else
+    {
+        size_t term = (len < size - 1U) ? len : size - 1U;
+        out[term] = '\0';
+    }
+}
+
+/**
+  * @brief  Helper: set a config string to storage
+  */
+static scpi_result_t _cfg_set_str(scpi_t *context, const char *key,
+                                   const char *label, const char *val, size_t val_len)
+{
+    size_t len = (val_len < STORAGE_MAX_VALUE_LEN) ? val_len : STORAGE_MAX_VALUE_LEN;
+    if (Storage_Set(key, STORAGE_TYPE_STR, val, (uint16_t)len) != APP_OK)
+    {
+        _write(context, "ERROR: %s set failed", label);
+        return SCPI_RES_ERR;
+    }
+    return SCPI_RES_OK;
+}
+
+/**
+  * @brief  Helper: query a stored config string
+  */
+static scpi_result_t _cfg_query_str(scpi_t *context, const char *key,
+                                     const char *def)
+{
+    char buf[STORAGE_MAX_VALUE_LEN];
+    _cfg_get_str(key, def, buf, sizeof(buf));
+    SCPI_ResultText(context, buf);
+    return SCPI_RES_OK;
+}
+
+/* ── SYSTem:CONFigure:MANufacturer ────────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemConfManufacturer(scpi_t *context)
+{
+    const char *val = NULL;
+    size_t len = 0;
+    if (!SCPI_ParamCharacters(context, &val, &len, TRUE))
+        return SCPI_RES_ERR;
+    return _cfg_set_str(context, "cfg.mfr", "Manufacturer", val, len);
+}
+
+scpi_result_t SCPI_SystemConfManufacturerQ(scpi_t *context)
+{
+    return _cfg_query_str(context, "cfg.mfr", SCPI_IDN1);
+}
+
+/* ── SYSTem:CONFigure:MODEel ──────────────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemConfModel(scpi_t *context)
+{
+    const char *val = NULL;
+    size_t len = 0;
+    if (!SCPI_ParamCharacters(context, &val, &len, TRUE))
+        return SCPI_RES_ERR;
+    return _cfg_set_str(context, "cfg.model", "Model", val, len);
+}
+
+scpi_result_t SCPI_SystemConfModelQ(scpi_t *context)
+{
+    return _cfg_query_str(context, "cfg.model", SCPI_IDN2);
+}
+
+/* ── SYSTem:CONFigure:SERial ──────────────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemConfSerial(scpi_t *context)
+{
+    const char *val = NULL;
+    size_t len = 0;
+    if (!SCPI_ParamCharacters(context, &val, &len, TRUE))
+        return SCPI_RES_ERR;
+    return _cfg_set_str(context, "cfg.sn", "Serial", val, len);
+}
+
+scpi_result_t SCPI_SystemConfSerialQ(scpi_t *context)
+{
+    return _cfg_query_str(context, "cfg.sn", SCPI_IDN3);
+}
+
+/* ── SYSTem:CONFigure:VERSion ─────────────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemConfVersion(scpi_t *context)
+{
+    const char *val = NULL;
+    size_t len = 0;
+    if (!SCPI_ParamCharacters(context, &val, &len, TRUE))
+        return SCPI_RES_ERR;
+    return _cfg_set_str(context, "cfg.ver", "Version", val, len);
+}
+
+scpi_result_t SCPI_SystemConfVersionQ(scpi_t *context)
+{
+    return _cfg_query_str(context, "cfg.ver", SCPI_IDN4);
+}
+
+/* ── SYSTem:CONFigure:STORe ───────────────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemConfStore(scpi_t *context)
+{
+    if (Storage_Commit() != APP_OK)
+    {
+        _write(context, "ERROR: Store failed");
+        return SCPI_RES_ERR;
+    }
+    _write(context, "OK (config saved to flash)");
+    return SCPI_RES_OK;
+}
+
+/* ── SYSTem:CONFigure:LOAD ────────────────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemConfLoad(scpi_t *context)
+{
+    if (Storage_Load() != APP_OK)
+    {
+        _write(context, "ERROR: Load failed (flash not initialized?)");
+        return SCPI_RES_ERR;
+    }
+    _write(context, "OK (config loaded from flash)");
+    return SCPI_RES_OK;
+}
+
+/* ── SYSTem:CONFigure:INITialize ──────────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemConfInitialize(scpi_t *context)
+{
+    if (Storage_Initialize() != APP_OK)
+    {
+        _write(context, "ERROR: Factory reset failed");
+        return SCPI_RES_ERR;
+    }
+    _write(context, "OK (factory reset, reboot recommended)");
+    return SCPI_RES_OK;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  SYSTem:COMMunicate:NETWork — TCP/IP settings stored in flash                */
+/*  NOTE: Changes take effect after reboot (LWIP re-initialization).            */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── SYSTem:COMMunicate:NETWork:IPADdress ──────────────────────────────────── */
+
+scpi_result_t SCPI_SystemCommNetIpAddress(scpi_t *context)
+{
+    const char *val = NULL;
+    size_t len = 0;
+    if (!SCPI_ParamCharacters(context, &val, &len, TRUE))
+        return SCPI_RES_ERR;
+    return _cfg_set_str(context, "net.ip", "IP address", val, len);
+}
+
+scpi_result_t SCPI_SystemCommNetIpAddressQ(scpi_t *context)
+{
+    return _cfg_query_str(context, "net.ip", "0.0.0.0");
+}
+
+/* ── SYSTem:COMMunicate:NETWork:NETMask ────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemCommNetNetmask(scpi_t *context)
+{
+    const char *val = NULL;
+    size_t len = 0;
+    if (!SCPI_ParamCharacters(context, &val, &len, TRUE))
+        return SCPI_RES_ERR;
+    return _cfg_set_str(context, "net.mask", "Netmask", val, len);
+}
+
+scpi_result_t SCPI_SystemCommNetNetmaskQ(scpi_t *context)
+{
+    return _cfg_query_str(context, "net.mask", "255.255.255.0");
+}
+
+/* ── SYSTem:COMMunicate:NETWork:GATEway ────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemCommNetGateway(scpi_t *context)
+{
+    const char *val = NULL;
+    size_t len = 0;
+    if (!SCPI_ParamCharacters(context, &val, &len, TRUE))
+        return SCPI_RES_ERR;
+    return _cfg_set_str(context, "net.gw", "Gateway", val, len);
+}
+
+scpi_result_t SCPI_SystemCommNetGatewayQ(scpi_t *context)
+{
+    return _cfg_query_str(context, "net.gw", "0.0.0.0");
+}
+
+/* ── SYSTem:COMMunicate:NETWork:PORT ───────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemCommNetPort(scpi_t *context)
+{
+    uint32_t port;
+    if (!SCPI_ParamUInt32(context, &port, TRUE))
+        return SCPI_RES_ERR;
+    if (port < 1U || port > 65535U)
+    {
+        _write(context, "ERROR: Port out of range (1-65535)");
+        return SCPI_RES_ERR;
+    }
+    if (Storage_Set("net.port", STORAGE_TYPE_U32, &port, sizeof(port)) != APP_OK)
+    {
+        _write(context, "ERROR: Port set failed");
+        return SCPI_RES_ERR;
+    }
+    return SCPI_RES_OK;
+}
+
+scpi_result_t SCPI_SystemCommNetPortQ(scpi_t *context)
+{
+    uint32_t port = 5025U;
+    uint16_t len = 0;
+    Storage_Get("net.port", NULL, &port, &len);
+    SCPI_ResultUInt32(context, port);
+    return SCPI_RES_OK;
+}
+
+/* ── SYSTem:COMMunicate:NETWork:MAC? ───────────────────────────────────────── */
+
+scpi_result_t SCPI_SystemCommNetMacQ(scpi_t *context)
+{
+    extern ETH_HandleTypeDef heth;
+    uint8_t *mac = heth.Init.MACAddr;
+
+    char buf[18];
+    snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    SCPI_ResultText(context, buf);
+    return SCPI_RES_OK;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
 /*  STATus subsystem                                                           */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -1092,6 +1357,30 @@ const scpi_command_t scpi_commands[] = {
     { .pattern = "ROUTe:SWITch#:INPut?",        .callback = SCPI_RouteSwitchInputQ,       },
     { .pattern = "ROUTe:SWITch#:CONDition?",    .callback = SCPI_RouteSwitchConditionQ,   },
     { .pattern = "ROUTe:SWITch#:ADDRess",       .callback = SCPI_RouteSwitchAddress,      },
+
+    /* ── SYSTem:CONFigure ────────────────────────────────────────────────────── */
+    { .pattern = "SYSTem:CONFigure:MANufacturer",  .callback = SCPI_SystemConfManufacturer,  },
+    { .pattern = "SYSTem:CONFigure:MANufacturer?", .callback = SCPI_SystemConfManufacturerQ, },
+    { .pattern = "SYSTem:CONFigure:MODEel",        .callback = SCPI_SystemConfModel,         },
+    { .pattern = "SYSTem:CONFigure:MODEel?",       .callback = SCPI_SystemConfModelQ,        },
+    { .pattern = "SYSTem:CONFigure:SERial",        .callback = SCPI_SystemConfSerial,        },
+    { .pattern = "SYSTem:CONFigure:SERial?",       .callback = SCPI_SystemConfSerialQ,       },
+    { .pattern = "SYSTem:CONFigure:VERSion",       .callback = SCPI_SystemConfVersion,       },
+    { .pattern = "SYSTem:CONFigure:VERSion?",      .callback = SCPI_SystemConfVersionQ,      },
+    { .pattern = "SYSTem:CONFigure:STORe",         .callback = SCPI_SystemConfStore,         },
+    { .pattern = "SYSTem:CONFigure:LOAD",          .callback = SCPI_SystemConfLoad,          },
+    { .pattern = "SYSTem:CONFigure:INITialize",    .callback = SCPI_SystemConfInitialize,    },
+
+    /* ── SYSTem:COMMunicate:NETWork ──────────────────────────────────────────── */
+    { .pattern = "SYSTem:COMMunicate:NETWork:IPADdress",  .callback = SCPI_SystemCommNetIpAddress,  },
+    { .pattern = "SYSTem:COMMunicate:NETWork:IPADdress?", .callback = SCPI_SystemCommNetIpAddressQ, },
+    { .pattern = "SYSTem:COMMunicate:NETWork:NETMask",    .callback = SCPI_SystemCommNetNetmask,    },
+    { .pattern = "SYSTem:COMMunicate:NETWork:NETMask?",   .callback = SCPI_SystemCommNetNetmaskQ,   },
+    { .pattern = "SYSTem:COMMunicate:NETWork:GATEway",    .callback = SCPI_SystemCommNetGateway,    },
+    { .pattern = "SYSTem:COMMunicate:NETWork:GATEway?",   .callback = SCPI_SystemCommNetGatewayQ,   },
+    { .pattern = "SYSTem:COMMunicate:NETWork:PORT",       .callback = SCPI_SystemCommNetPort,       },
+    { .pattern = "SYSTem:COMMunicate:NETWork:PORT?",      .callback = SCPI_SystemCommNetPortQ,      },
+    { .pattern = "SYSTem:COMMunicate:NETWork:MAC?",       .callback = SCPI_SystemCommNetMacQ,       },
 
     /* ── STATus ────────────────────────────────────────────────────────────── */
     { .pattern = "STATus:OPERation:EVENt?",     .callback = SCPI_StatusOperationEventQ,     },

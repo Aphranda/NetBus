@@ -50,6 +50,7 @@ targets:
         - ThirdParty/CAN/Inc
         - ThirdParty/SCPI/inc
         - ThirdParty/SCPI/port
+        - ThirdParty/Flash/Inc
       libList: []
     excludeList: []
     settings: {}

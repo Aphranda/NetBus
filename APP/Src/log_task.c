@@ -88,7 +88,7 @@ static App_Status_t _log_task_init(void)
     }
 
     SCPI_SystemInit();
-    LOG_INFO("Log_Task: SCPI initialized (%u commands)", 44U);
+    LOG_INFO("Log_Task: SCPI initialized (%u commands)", 65U);
 
     return APP_OK;
 }

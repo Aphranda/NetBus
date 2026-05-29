@@ -43,9 +43,9 @@ extern "C" {
 /* SCPI configuration */
 #define SCPI_INPUT_BUFFER_LENGTH    256U
 #define SCPI_ERROR_QUEUE_SIZE       17U
-#define SCPI_IDN1                   "NetBus"
-#define SCPI_IDN2                   "PPA-NB100"
-#define SCPI_IDN3                   "00000000"
+#define SCPI_IDN1                   "GTS"
+#define SCPI_IDN2                   "PPA-NETBUS"
+#define SCPI_IDN3                   "20260530"
 #define SCPI_IDN4                   "v1.0.0"
 
 extern const scpi_command_t scpi_commands[];
@@ -140,6 +140,32 @@ scpi_result_t SCPI_RouteSwitchOutput(scpi_t *context);
 scpi_result_t SCPI_RouteSwitchInputQ(scpi_t *context);
 scpi_result_t SCPI_RouteSwitchConditionQ(scpi_t *context);
 scpi_result_t SCPI_RouteSwitchAddress(scpi_t *context);
+
+/* ── SYSTem:CONFigure (device identity, stored in flash) ──────────────────── */
+
+scpi_result_t SCPI_SystemConfManufacturer(scpi_t *context);
+scpi_result_t SCPI_SystemConfManufacturerQ(scpi_t *context);
+scpi_result_t SCPI_SystemConfModel(scpi_t *context);
+scpi_result_t SCPI_SystemConfModelQ(scpi_t *context);
+scpi_result_t SCPI_SystemConfSerial(scpi_t *context);
+scpi_result_t SCPI_SystemConfSerialQ(scpi_t *context);
+scpi_result_t SCPI_SystemConfVersion(scpi_t *context);
+scpi_result_t SCPI_SystemConfVersionQ(scpi_t *context);
+scpi_result_t SCPI_SystemConfStore(scpi_t *context);
+scpi_result_t SCPI_SystemConfLoad(scpi_t *context);
+scpi_result_t SCPI_SystemConfInitialize(scpi_t *context);
+
+/* ── SYSTem:COMMunicate:NETWork (TCP/IP settings, stored in flash) ────────── */
+
+scpi_result_t SCPI_SystemCommNetIpAddress(scpi_t *context);
+scpi_result_t SCPI_SystemCommNetIpAddressQ(scpi_t *context);
+scpi_result_t SCPI_SystemCommNetNetmask(scpi_t *context);
+scpi_result_t SCPI_SystemCommNetNetmaskQ(scpi_t *context);
+scpi_result_t SCPI_SystemCommNetGateway(scpi_t *context);
+scpi_result_t SCPI_SystemCommNetGatewayQ(scpi_t *context);
+scpi_result_t SCPI_SystemCommNetPort(scpi_t *context);
+scpi_result_t SCPI_SystemCommNetPortQ(scpi_t *context);
+scpi_result_t SCPI_SystemCommNetMacQ(scpi_t *context);
 
 /* ── STATus subsystem ─────────────────────────────────────────────────────── */
 

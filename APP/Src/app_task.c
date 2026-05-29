@@ -36,6 +36,7 @@
 #include "attenuator_task.h"
 #include "rfsw_task.h"
 #include "detector_task.h"
+#include "storage_task.h"
 #include "lwip.h"
 #include "net_scpi.h"
 #include "log.h"
@@ -102,6 +103,13 @@ App_Status_t App_Init(void)
 
     /* ── Register Modbus task -- owns RS485/Modbus RTU infra ─────────────────── */
     status = App_RegisterModule(&g_modbus_task_module);
+    if (status != APP_OK)
+    {
+        return status;
+    }
+
+    /* ── Register Storage task -- after Modbus for RS485, before other modules ─ */
+    status = App_RegisterModule(&g_storage_task_module);
     if (status != APP_OK)
     {
         return status;
