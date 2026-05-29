@@ -36,6 +36,7 @@
 #include "attenuator_task.h"
 #include "rfsw_task.h"
 #include "detector_task.h"
+#include "web_task.h"
 #include "storage_task.h"
 #include "scpi_queue.h"
 #include "lwip.h"
@@ -136,6 +137,13 @@ App_Status_t App_Init(void)
 
     /* ── Register Detector task ─────────────────────────────────────────────── */
     status = App_RegisterModule(&g_detector_task_module);
+    if (status != APP_OK)
+    {
+        return status;
+    }
+
+    /* ── Register Web task — serves system monitoring dashboard ─────────── */
+    status = App_RegisterModule(&g_web_task_module);
     if (status != APP_OK)
     {
         return status;

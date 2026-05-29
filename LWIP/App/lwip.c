@@ -30,6 +30,8 @@
 
 /* USER CODE BEGIN 0 */
 #include "log.h"
+#include "storage_task.h"
+#include <stdio.h>
 /* USER CODE END 0 */
 /* Private function prototypes -----------------------------------------------*/
 static void ethernet_link_status_updated(struct netif *netif);
@@ -77,6 +79,41 @@ void MX_LWIP_Init(void)
   GATEWAY_ADDRESS[3] = 1;
 
 /* USER CODE BEGIN IP_ADDRESSES */
+  /* ── Try loading network config from flash ────────────────────────── */
+  {
+      char buf[32];
+      Storage_Type_t type;
+      uint16_t len;
+      unsigned int o[4];
+
+      if (Storage_Get("net.ip", &type, buf, &len) == 0
+          && type == STORAGE_TYPE_STR && len < sizeof(buf)) {
+          buf[len] = '\0';
+          if (sscanf(buf, "%u.%u.%u.%u", &o[0], &o[1], &o[2], &o[3]) == 4) {
+              IP_ADDRESS[0] = (uint8_t)o[0]; IP_ADDRESS[1] = (uint8_t)o[1];
+              IP_ADDRESS[2] = (uint8_t)o[2]; IP_ADDRESS[3] = (uint8_t)o[3];
+              LOG_INFO("LWIP: IP loaded from flash: %s", buf);
+          }
+      }
+      if (Storage_Get("net.mask", &type, buf, &len) == 0
+          && type == STORAGE_TYPE_STR && len < sizeof(buf)) {
+          buf[len] = '\0';
+          if (sscanf(buf, "%u.%u.%u.%u", &o[0], &o[1], &o[2], &o[3]) == 4) {
+              NETMASK_ADDRESS[0] = (uint8_t)o[0]; NETMASK_ADDRESS[1] = (uint8_t)o[1];
+              NETMASK_ADDRESS[2] = (uint8_t)o[2]; NETMASK_ADDRESS[3] = (uint8_t)o[3];
+              LOG_INFO("LWIP: mask loaded from flash: %s", buf);
+          }
+      }
+      if (Storage_Get("net.gw", &type, buf, &len) == 0
+          && type == STORAGE_TYPE_STR && len < sizeof(buf)) {
+          buf[len] = '\0';
+          if (sscanf(buf, "%u.%u.%u.%u", &o[0], &o[1], &o[2], &o[3]) == 4) {
+              GATEWAY_ADDRESS[0] = (uint8_t)o[0]; GATEWAY_ADDRESS[1] = (uint8_t)o[1];
+              GATEWAY_ADDRESS[2] = (uint8_t)o[2]; GATEWAY_ADDRESS[3] = (uint8_t)o[3];
+              LOG_INFO("LWIP: GW loaded from flash: %s", buf);
+          }
+      }
+  }
 /* USER CODE END IP_ADDRESSES */
 
   /* Initialize the LwIP stack with RTOS */
