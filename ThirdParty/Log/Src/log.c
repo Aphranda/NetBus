@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "cmsis_os2.h"
 #include "usart.h"      /* for huart8 in RS485 dispatch */
 #include "rs485.h"      /* for RS485_UART_RxEventCallback */
 
@@ -95,6 +96,13 @@ static volatile uint8_t  g_dbg_pos;                       /*!< Current write pos
 static volatile uint8_t  g_dbg_cmd_pending;               /*!< Flag: complete line ready     */
 static uint8_t           g_dbg_echo = 0U;                 /*!< Echo mode (default: off)      */
 static uint8_t           g_dbg_enabled = 1U;              /*!< Debug CLI fallback (default: on) */
+
+/**
+  * @brief Mutex protecting HAL_UART_Transmit from concurrent task access.
+  * @note  Replaces __disable_irq() so that UART RX IDLE interrupts can still
+  *        fire during TX — preventing DMA ring-buffer overrun.
+  */
+static osMutexId_t g_uart_tx_mutex = NULL;
 
 /**
   * @brief DMA RX ring buffer — receives UART data via DMA in CIRCULAR mode
@@ -165,6 +173,12 @@ HAL_StatusTypeDef Log_InitEx(const Log_Config_t *config)
     g_log_config.timeout   = config->timeout;
     g_log_config.level     = config->level;
     g_log_config.enable_ts = config->enable_ts;
+
+    /* ── Create UART TX mutex if not already created ───────────────────────── */
+    if (g_uart_tx_mutex == NULL)
+    {
+        g_uart_tx_mutex = osMutexNew(NULL);
+    }
 
     /* ── Initialize debug command subsystem ──────────────────────────────── */
 
@@ -257,10 +271,9 @@ void Log_Print(uint8_t level, const char *fmt, ...)
     buffer[pos] = '\0';
 
     /* ── Transmit via UART ───────────────────────────────────────────────── */
-    /* Temporarily disable interrupts to prevent concurrent UART access */
-    __disable_irq();
+    if (g_uart_tx_mutex != NULL) osMutexAcquire(g_uart_tx_mutex, osWaitForever);
     HAL_UART_Transmit(g_log_config.huart, (uint8_t *)buffer, (uint16_t)pos, g_log_config.timeout);
-    __enable_irq();
+    if (g_uart_tx_mutex != NULL) osMutexRelease(g_uart_tx_mutex);
 }
 
 /**
@@ -277,10 +290,9 @@ void Log_WriteRaw(const char *data, size_t len)
         return;
     }
 
-    /* Temporarily disable interrupts to prevent concurrent UART access */
-    __disable_irq();
+    if (g_uart_tx_mutex != NULL) osMutexAcquire(g_uart_tx_mutex, osWaitForever);
     HAL_UART_Transmit(g_log_config.huart, (uint8_t *)data, (uint16_t)len, g_log_config.timeout);
-    __enable_irq();
+    if (g_uart_tx_mutex != NULL) osMutexRelease(g_uart_tx_mutex);
 }
 
 /**
@@ -542,6 +554,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         return;
     }
 
+    /* If previous line has not been consumed yet, skip processing.
+     * Data stays in the DMA ring buffer and will be picked up on the
+     * next IDLE event after the pending line is consumed. */
+    if (g_dbg_cmd_pending != 0U)
+    {
+        return;
+    }
+
     /* ── Compute DMA write position from NDTR ──────────────────────────── */
     /* NDTR decrements from LOG_DBG_BUF_SIZE → 0 as DMA fills the buffer.
      * Write index = (BUF_SIZE - NDTR) gives the current write position.
@@ -608,11 +628,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
                 if (g_dbg_pos > 0U)
                 {
                     g_dbg_pos--;
-                    if (g_dbg_echo != 0U)
-                    {
-                        uint8_t bs_seq[] = { 0x08U, 0x20U, 0x08U };
-                        HAL_UART_Transmit(huart, bs_seq, 3U, 100U);
-                    }
                 }
                 i++;
                 continue;
@@ -624,19 +639,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
                 if (g_dbg_pos > 0U)
                 {
                     g_dbg_cmd_pending = 1U;
-                    if (g_dbg_echo != 0U)
-                    {
-                        uint8_t crlf[] = { '\r', '\n' };
-                        HAL_UART_Transmit(huart, crlf, 2U, 100U);
-                    }
-                    /* Line complete — remaining bytes belong to next
-                     * line and will be processed on next IDLE event */
                     goto _ringbuf_done;
-                }
-                if (g_dbg_echo != 0U)
-                {
-                    uint8_t crlf[] = { '\r', '\n' };
-                    HAL_UART_Transmit(huart, crlf, 2U, 100U);
                 }
                 i++;
                 continue;
@@ -648,10 +651,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
                 if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
                 {
                     g_dbg_buffer[g_dbg_pos++] = (char)ch;
-                    if (g_dbg_echo != 0U)
-                    {
-                        HAL_UART_Transmit(huart, &g_dma_rx_buf[i], 1U, 100U);
-                    }
                 }
             }
 
@@ -673,11 +672,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
                     if (g_dbg_pos > 0U)
                     {
                         g_dbg_pos--;
-                        if (g_dbg_echo != 0U)
-                        {
-                            uint8_t bs_seq[] = { 0x08U, 0x20U, 0x08U };
-                            HAL_UART_Transmit(huart, bs_seq, 3U, 100U);
-                        }
                     }
                     i++;
                     continue;
@@ -689,17 +683,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
                     if (g_dbg_pos > 0U)
                     {
                         g_dbg_cmd_pending = 1U;
-                        if (g_dbg_echo != 0U)
-                        {
-                            uint8_t crlf[] = { '\r', '\n' };
-                            HAL_UART_Transmit(huart, crlf, 2U, 100U);
-                        }
                         goto _ringbuf_done;
-                    }
-                    if (g_dbg_echo != 0U)
-                    {
-                        uint8_t crlf[] = { '\r', '\n' };
-                        HAL_UART_Transmit(huart, crlf, 2U, 100U);
                     }
                     i++;
                     continue;
@@ -711,10 +695,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
                     if (g_dbg_pos < (LOG_DBG_BUF_SIZE - 1U))
                     {
                         g_dbg_buffer[g_dbg_pos++] = (char)ch;
-                        if (g_dbg_echo != 0U)
-                        {
-                            HAL_UART_Transmit(huart, &g_dma_rx_buf[i], 1U, 100U);
-                        }
                     }
                 }
 

@@ -211,21 +211,19 @@ static App_Status_t _log_task_process(void)
         return APP_OK;
     }
 
+    /* Consume immediately — prevents IDLE IRQ from corrupting the buffer
+     * while we parse (SCPI_TryParse runs with IRQs enabled). */
+    Log_DbgConsume();
+
     /* Try SCPI parser first */
     if (SCPI_TryParse(line))
     {
         /* SCPI recognized and handled the command */
-        Log_DbgConsume();
     }
     else if (Log_DbgIsEnabled())
     {
         /* SCPI didn't recognize it — fall back to debug CLI */
-        Log_DbgProcess();
-    }
-    else
-    {
-        /* Neither SCPI nor debug CLI can handle it — discard */
-        Log_DbgConsume();
+        Log_DbgInject(line);
     }
 
     return APP_OK;
