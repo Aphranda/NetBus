@@ -37,6 +37,7 @@
 #include "rfsw_task.h"
 #include "detector_task.h"
 #include "storage_task.h"
+#include "scpi_queue.h"
 #include "lwip.h"
 #include "net_scpi.h"
 #include "log.h"
@@ -93,6 +94,9 @@ App_Status_t App_Init(void)
     {
         return status;
     }
+
+    /* ── Initialize SCPI message queue (after Log, before module inits) ──────── */
+    SCPI_Queue_Init();
 
     /* ── Register CAN task -- owns FDCAN1 driver ────────────────────────────── */
     status = App_RegisterModule(&g_can_task_module);
@@ -307,4 +311,15 @@ void StartCanTask(void *argument)
     (void)argument;
     LOG_INFO("CAN task: running (interrupt-driven)");
     Can_Task_Loop();
+}
+
+/**
+  * @brief  SCPI task -- dequeues and processes SCPI commands from UART + TCP
+  * @note   Overrides __weak StartSCPITask in freertos.c.
+  */
+void StartSCPITask(void *argument)
+{
+    (void)argument;
+    LOG_INFO("SCPI task: starting command processing loop");
+    SCPI_Queue_TaskLoop();
 }

@@ -2,24 +2,22 @@
 /**
   ******************************************************************************
   * @file    log_task.c
-  * @brief   Log task implementation -- wraps ThirdParty/Log as App_Module_t
+  * @brief   Log task — wraps ThirdParty/Log as App_Module_t
   *
-  *          Registration order matters:
-  *            Log_Task must be registered FIRST so that other modules can
-  *            use LOG_INFO/WARN/ERROR during their own initialization.
-  ******************************************************************************
-  * @attention
+  *          Responsibilities:
+  *            - Initialize the Log subsystem (UART7 DMA RX)
+  *            - Forward received command lines to SCPI queue
+  *            - Handle debug CLI commands that bypass SCPI parser
   *
-  * Copyright (c) 2026 NetBus Project
-  * All rights reserved.
-  *
+  *          SCPI parsing now runs in a dedicated SCPI_Task thread.
+  *          log_task only owns UART RX → line extraction → queue enqueue.
   ******************************************************************************
   */
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
 #include "log_task.h"
-#include "scpi-def.h"
+#include "scpi_queue.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -87,9 +85,7 @@ static App_Status_t _log_task_init(void)
         return APP_ERROR;
     }
 
-    SCPI_SystemInit();
-    LOG_INFO("Log_Task: SCPI initialized (%u commands)", 65U);
-
+    LOG_INFO("Log_Task: UART7 DMA RX started");
     return APP_OK;
 }
 
@@ -103,19 +99,8 @@ static App_Status_t _log_task_process(void)
         return APP_OK;
     }
 
-    /* Known debug commands bypass SCPI to avoid spurious -113 errors */
-    if (Log_DbgIsEnabled() && Log_DbgIsKnownCommand(line))
-    {
-        Log_DbgProcessLine(line);
-    }
-    else if (SCPI_TryParse(line))
-    {
-        /* SCPI recognized and handled the command */
-    }
-    else if (Log_DbgIsEnabled())
-    {
-        Log_DbgProcessLine(line);
-    }
+    /* Forward to SCPI queue — SCPI_Task handles parsing */
+    SCPI_EnqueueLine(line);
 
     return APP_OK;
 }

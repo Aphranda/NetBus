@@ -10,8 +10,9 @@
 #include "cmsis_os2.h"
 #include "lwip/sockets.h"
 #include "net_scpi.h"
-#include "log.h"
 #include "scpi-def.h"
+#include "scpi_queue.h"
+#include "log.h"
 
 #define SCPI_TCP_PORT        5025
 #define SCPI_TCP_STACK_SIZE  2048
@@ -80,7 +81,7 @@ static void NetSCPI_ProcessClient(void)
             if (line_pos == 0) continue;
             line_buf[line_pos] = '\0';
             line_pos = 0;
-            SCPI_TryParse(line_buf);  /* mutex handled inside */
+            SCPI_EnqueueLine(line_buf);
         }
         else if (line_pos < sizeof(line_buf) - 1)
         {
