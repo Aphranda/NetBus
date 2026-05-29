@@ -53,7 +53,7 @@ typedef struct {
   */
 #define LOG_DBG_BUF_SIZE    256U  /*!< DMA RX ring buffer (bytes)        */
 #define LOG_DBG_LINE_LEN    128U  /*!< Max line length in message queue  */
-#define LOG_DBG_QUEUE_SIZE     4  /*!< Message queue capacity (lines)    */
+#define LOG_DBG_QUEUE_SIZE     8  /*!< Message queue capacity (lines)    */
 #define LOG_DBG_MAX_CMDS     10U  /*!< Maximum registered commands       */
 #define LOG_DBG_MAX_ARGS      8U  /*!< Maximum arguments per command     */
 
