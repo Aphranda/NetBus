@@ -58,7 +58,7 @@
   *         tail = position where application has read up to
   */
 typedef struct {
-    uint8_t  buf[RS485_RX_BUF_SIZE];  /*!< Data buffer (DMA target)     */
+    uint8_t  buf[RS485_RX_BUF_SIZE] __attribute__((aligned(32)));
     uint16_t head;                     /*!< Write index (DMA/IDLE cb)    */
     uint16_t tail;                     /*!< Read index (application)     */
 } RS485_RingBuf_t;
@@ -78,13 +78,13 @@ typedef struct {
   * @brief  RS485 state structure
   */
 static struct {
+    RS485_RingBuf_t      rx_ring;           /*!< RX ring buffer (DMA target) — must be first for cache alignment */
     UART_HandleTypeDef  *huart;             /*!< UART handle (&huart8)        */
-    RS485_RingBuf_t      rx_ring;           /*!< RX ring buffer (DMA target)  */
     RS485_RxCallback_t   rx_callback;       /*!< Frame received callback      */
     volatile uint8_t     tx_busy;           /*!< TX in progress flag (DMA)    */
 } g_rs485 = {
-    .huart        = NULL,
     .rx_ring      = { .head = 0U, .tail = 0U },
+    .huart        = NULL,
     .rx_callback  = NULL,
     .tx_busy      = 0U,
 };

@@ -115,7 +115,7 @@ static osMessageQueueId_t g_line_queue = NULL;
   *        DMA continuously writes incoming data; IDLE ISR reads and assembles
   *        lines, pushing them into g_line_queue.
   */
-static uint8_t  g_dma_rx_buf[LOG_DBG_BUF_SIZE];
+static uint8_t  g_dma_rx_buf[LOG_DBG_BUF_SIZE] __attribute__((aligned(32)));
 static uint16_t g_rb_rd_idx;            /*!< Ring buffer read index */
 
 /* Private function prototypes -----------------------------------------------*/
