@@ -5,9 +5,9 @@
   * @brief   RF Switch control task — RS485 Modbus RTU master for SP10T switches
   *
   *          Architecture:
-  *            - init:   Calls RS485_Init() + Modbus_Init(), registers "rfsw" CLI
+  *            - init:   Registers "rfsw" CLI. RS485/Modbus already initialized
+  *                      by the Modbus module (registered before RFSW).
   *            - process:Polls RS485 RX buffer, prints unexpected RX to Log
-  *            - debug:  Registers "rfsw" CLI command for RF switch control
   *
   *          RF Switch Register Map (from Doc/RF_Switch_Commands.md):
   *            Holding Registers (FC 0x03/0x06/0x10):
@@ -26,17 +26,6 @@
   *              0x0000-0x0003 — Input pins CTRL1..CTRL4
   *
   *          Debug CLI Usage:
-  *            rfsw get <addr>              — Read current channel
-  *            rfsw set <addr> <ch>         — Set channel (1-10)
-  *            rfsw mode <addr> [io|cmd]    — Get/set work mode
-  *            rfsw info <addr>             — Dump device identity & status
-  *            rfsw output <addr> <id> <0|1>— Set single output coil
-  *            rfsw outputs <addr>          — Read all 6 output coils
-  *            rfsw inputs <addr>           — Read 4 discrete inputs
-  *            rfsw status <addr>           — Read device status register
-  *            rfsw id <addr> <new_id>      — Change device Modbus address
-  *          Modbus raw frame injection:
- *            modbus <hex...>              — Send raw Modbus frame (CRC auto)
   ******************************************************************************
   * @attention
   *
@@ -79,10 +68,6 @@
   */
 static uint8_t g_rs485_rx_buf[RS485_PRINT_MAX];
 
-/**
-  * @brief  Buffer for raw Modbus frames (debug CLI)
-  */
-static uint8_t g_rfsw_raw_buf[MODBUS_MAX_FRAME_LEN];
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -92,7 +77,6 @@ static void         _rfsw_task_on_error(App_Status_t err);
 
 /* Debug CLI command handlers */
 static void _dbg_cmd_rfsw(int argc, char **argv);
-static void _dbg_cmd_modbus(int argc, char **argv);
 
 /* High-level RF switch operations */
 static Modbus_Result_t _rfsw_read_channel(uint8_t addr, uint8_t *channel);
@@ -111,7 +95,6 @@ static Modbus_Result_t _rfsw_read_status(uint8_t addr, uint16_t *status);
 static Modbus_Result_t _rfsw_write_device_id(uint8_t addr, uint8_t new_id);
 
 /* Internal helpers */
-static int      _hex_to_byte(const char *hex, uint8_t *out);
 static void     _print_hex(const char *prefix, const uint8_t *data, uint16_t len);
 static void     _print_modbus_result(Modbus_Result_t res);
 static void     _extract_name_chars(const uint16_t *regs, char *name, uint8_t max_len);
@@ -136,23 +119,15 @@ const App_Module_t g_rfsw_task_module = {
 /**
   * @brief  Initialize the RF Switch control subsystem
   * @note   Called by App_Task_Init() during module scan.
-  *         Initializes RS485 driver (UART8 DMA+IDLE), Modbus RTU master,
-  *         and registers the "rfsw" debug CLI command.
+  *         RS485 and Modbus are already initialized by the Modbus module
+  *         (registered at index 2, before RFSW at index 4).
+  *         Only registers the "rfsw" debug CLI command here.
   * @retval APP_OK on success, APP_ERROR on failure
   */
 static App_Status_t _rfsw_task_init(void)
 {
-    /* Initialize RS485 driver (starts DMA CIRCULAR RX + IDLE detection) */
-    if (RS485_Init() != HAL_OK)
-    {
-        LOG_ERROR("RFSW: RS485_Init() failed");
-        return APP_ERROR;
-    }
-
-    /* Initialize Modbus RTU Master */
-    Modbus_Init();
-    LOG_INFO("RFSW: Modbus master initialized (timeout=%lu ms)",
-             (unsigned long)Modbus_GetTimeout());
+    /* RS485 and Modbus are already initialized by the Modbus module
+     * (registered before RFSW). Only register debug CLI commands here. */
 
     /* Register "rfsw" debug CLI command */
     if (Log_RegisterDbgCmdEx("rfsw", _dbg_cmd_rfsw, "RF switch control (Modbus)") != HAL_OK)
@@ -161,16 +136,8 @@ static App_Status_t _rfsw_task_init(void)
         return APP_ERROR;
     }
 
-    /* Register "modbus" debug CLI command */
-    if (Log_RegisterDbgCmdEx("modbus", _dbg_cmd_modbus, "Raw Modbus frame injection") != HAL_OK)
-    {
-        LOG_ERROR("RFSW: failed to register 'modbus' debug command");
-        return APP_ERROR;
-    }
-
     LOG_INFO("RFSW: initialized (UART8 DMA+IDLE, DE=PE3)");
     LOG_INFO("RFSW: type 'rfsw' for SP10T switch control commands");
-    LOG_INFO("RFSW: type 'modbus' for raw Modbus frame injection");
 
     return APP_OK;
 }
@@ -856,111 +823,8 @@ static void _dbg_cmd_rfsw(int argc, char **argv)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Debug CLI — "modbus" command (raw Modbus RTU frame injection)              */
-/* ─────────────────────────────────────────────────────────────────────────── */
-
-/**
-  * @brief  'modbus' debug CLI command — send raw Modbus RTU frame
-  *
-  *         Usage:
-  *           modbus <hex bytes...>
-  *             - Send a raw Modbus RTU frame and display the response
-  *             - CRC16 is automatically appended to the frame
-  *             - Frame should include address + function code + data
-  *             - Example: modbus 01 03 00 00 00 01  →  read channel
-  */
-static void _dbg_cmd_modbus(int argc, char **argv)
-{
-    if (argc < 2)
-    {
-        LOG_INFO("Modbus raw frame injection (RS485):");
-        LOG_INFO("  modbus <hex bytes...>  — send raw Modbus frame (CRC auto)");
-        LOG_INFO("  Frame must include address + function code + data.");
-        LOG_INFO("  CRC16 is computed and appended automatically.");
-        LOG_INFO("Examples:");
-        LOG_INFO("  modbus 01 03 00 00 00 01   — read channel from device 1");
-        LOG_INFO("  modbus 01 06 00 00 00 05   — write channel 5 to device 1");
-        return;
-    }
-
-    /* Build request frame from hex bytes */
-    uint16_t frame_len = 0U;
-
-    for (int i = 1; i < argc && frame_len < (MODBUS_MAX_FRAME_LEN - 2U); i++)
-    {
-        uint8_t byte;
-        if (_hex_to_byte(argv[i], &byte) != 0)
-        {
-            LOG_INFO("Error: invalid hex byte '%s' at position %d", argv[i], i);
-            return;
-        }
-        g_rfsw_raw_buf[frame_len++] = byte;
-    }
-
-    if (frame_len < 2U)
-    {
-        LOG_INFO("Error: frame must include at least address + function code");
-        return;
-    }
-
-    /* Compute and append CRC16 */
-    uint16_t crc = Modbus_CRC16(g_rfsw_raw_buf, frame_len);
-    g_rfsw_raw_buf[frame_len++] = (uint8_t)(crc & 0xFFU);
-    g_rfsw_raw_buf[frame_len++] = (uint8_t)((crc >> 8) & 0xFFU);
-
-    LOG_INFO("Modbus: sending raw frame (%u bytes)", (unsigned)frame_len);
-    _print_hex("Modbus TX", g_rfsw_raw_buf, frame_len);
-
-    /* Send and wait for response */
-    uint8_t  resp[MODBUS_MAX_FRAME_LEN];
-    uint16_t resp_len = (uint16_t)sizeof(resp);
-
-    Modbus_Result_t res = Modbus_SendRaw(g_rfsw_raw_buf, frame_len, resp, &resp_len);
-
-    if (res.status == MODBUS_OK)
-    {
-        _print_hex("Modbus RX", resp, resp_len);
-
-        /* Check for exception */
-        if (resp_len >= 3U && (resp[1] & 0x80U))
-        {
-            LOG_INFO("Modbus: EXCEPTION (code=0x%02X: %s)",
-                     (unsigned)resp[2],
-                     Modbus_ExceptionString(resp[2]));
-        }
-    }
-    else
-    {
-        _print_modbus_result(res);
-    }
-}
-
-/* ─────────────────────────────────────────────────────────────────────────── */
 /*  Internal Helpers                                                           */
 /* ─────────────────────────────────────────────────────────────────────────── */
-
-/**
-  * @brief  Convert a hex string (e.g. "0x1A", "1A", "01") to a byte
-  * @param  hex  Null-terminated hex string
-  * @param  out  Output byte
-  * @retval 0 on success, -1 on error
-  */
-static int _hex_to_byte(const char *hex, uint8_t *out)
-{
-    if (hex == NULL || out == NULL)
-    {
-        return -1;
-    }
-
-    long val = strtol(hex, NULL, 16);
-    if (val < 0 || val > 255)
-    {
-        return -1;
-    }
-
-    *out = (uint8_t)(val & 0xFFU);
-    return 0;
-}
 
 /**
   * @brief  Print a hex dump to the Log console

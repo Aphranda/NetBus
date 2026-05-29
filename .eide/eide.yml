@@ -97,11 +97,16 @@ targets:
         baseAddr: ""
         bin: ""
         cpuInfo:
-          cpuName: "null"
-          vendor: "null"
+          cpuName: STM32H743ZI
+          vendor: ST
         otherCmds: ""
         proType: 1
         speed: 8000
+      OpenOCD:
+        baseAddr: "0x08000000"
+        bin: ""
+        interface: cmsis-dap-v1
+        target: stm32h7x
       STLink:
         address: "0x08000000"
         bin: ""
@@ -112,7 +117,7 @@ targets:
         resetMode: default
         runAfterProgram: true
         speed: 4000
-    uploader: STLink
+    uploader: JLink
   Release:
     cppPreprocessAttrs:
       defineList:

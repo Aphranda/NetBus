@@ -31,6 +31,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "app_task.h"
 #include "log_task.h"
+#include "can_task.h"
+#include "modbus_task.h"
 #include "attenuator_task.h"
 #include "rfsw_task.h"
 #include "detector_task.h"
@@ -86,6 +88,20 @@ App_Status_t App_Init(void)
 
     /* ── Register Log task first — must be first so other modules can log during init ─ */
     status = App_RegisterModule(&g_log_task_module);
+    if (status != APP_OK)
+    {
+        return status;
+    }
+
+    /* ── Register CAN task — owns FDCAN1 driver ────────────────────────────── */
+    status = App_RegisterModule(&g_can_task_module);
+    if (status != APP_OK)
+    {
+        return status;
+    }
+
+    /* ── Register Modbus task — owns RS485/Modbus RTU infra ─────────────────── */
+    status = App_RegisterModule(&g_modbus_task_module);
     if (status != APP_OK)
     {
         return status;
@@ -192,6 +208,9 @@ App_Status_t App_Task_Init(void)
   */
 void App_Task_Loop(void)
 {
+    LOG_INFO("FreeRTOS started, entering main loop (%u modules)",
+             (unsigned)g_module_count);
+
     /* Main loop — process all modules forever */
     while (1U)
     {
@@ -257,4 +276,26 @@ void StartETHTask(void *argument)
     {
         osDelay(1000);
     }
+}
+
+/**
+  * @brief  Modbus task — runs RS485 RX monitoring loop
+  * @note   Overrides __weak StartModbusTask in freertos.c.
+  */
+void StartModbusTask(void *argument)
+{
+    (void)argument;
+    LOG_INFO("Modbus task: starting RS485/Modbus processing loop");
+    Modbus_Task_Loop();
+}
+
+/**
+  * @brief  CAN task — idle loop (CAN is interrupt-driven)
+  * @note   Overrides __weak StartCanTask in freertos.c.
+  */
+void StartCanTask(void *argument)
+{
+    (void)argument;
+    LOG_INFO("CAN task: running (interrupt-driven)");
+    Can_Task_Loop();
 }

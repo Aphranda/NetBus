@@ -5,9 +5,9 @@
   * @brief   RF Switch control task — RS485 Modbus RTU master for SP10T switches
   *
   *          Responsibilities:
-  *            - Initialize RS485 driver (UART8 DMA+IDLE) and Modbus RTU master
-  *            - Register debug CLI command "rfsw" for RF switch control
-  *            - Provide high-level helpers for channel/mode/output/status ops
+ *            - Register debug CLI command "rfsw" for RF switch control
+ *            - RS485 and Modbus are initialized by the Modbus module
+ *              (registered before RFSW).
   *
   *          Usage:
   *            1. Include this header in main.c or app_task.c
@@ -24,7 +24,6 @@
   *            rfsw inputs <addr>           — Read 4 discrete inputs
   *            rfsw status <addr>           — Read device status register
   *            rfsw id <addr> <new_id>      — Change device Modbus address
-  *            rfsw raw <addr> <hex...>     — Send raw Modbus frame
   *
   *          Reference:
   *            Doc/RF_Switch_Commands.md — SP10T Modbus RTU register map
