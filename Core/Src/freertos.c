@@ -59,7 +59,7 @@ const osThreadAttr_t defaultTask_attributes = {
 osThreadId_t ETH_TaskHandle;
 const osThreadAttr_t ETH_Task_attributes = {
   .name = "ETH_Task",
-  .stack_size = 1024 * 4,
+  .stack_size = 4096 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for Modbus_Task */

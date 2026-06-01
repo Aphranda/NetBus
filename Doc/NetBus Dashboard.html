@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-<!-- saved from url=(0020)http://192.168.1.10/ -->
+<!-- saved from url=(0030)http://192.168.1.10/index.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="refresh" content="10">
 <title>NetBus Dashboard</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -28,9 +27,23 @@ th{text-align:left;padding:.4rem .6rem;color:#6088a8;font-size:.78rem;font-weigh
 .nav a:hover,.nav a.on{background:#1a3a50;color:#90c0e0}
 .footer{text-align:center;color:#405060;font-size:.75rem;margin-top:1rem}
 .muted{color:#506070;font-size:.8rem}
-a{color:#60b0e0}</style>
+a{color:#60b0e0}
+.main{display:flex;gap:1rem;width:100%;max-width:1100px;align-items:flex-start}
+.left{flex:1;min-width:0}
+.right{width:380px;flex-shrink:0;position:sticky;top:1rem}
+.right .card{padding:1rem}
+textarea{width:100%;background:#0a1018;color:#90c0d0;border:1px solid #253545;border-radius:6px;padding:.5rem;font-family:Consolas,monospace;font-size:.78rem;resize:vertical;height:360px}
+.scpi-form{display:flex;gap:.4rem}
+.scpi-form input{flex:1;padding:.4rem .5rem;background:#0a1018;border:1px solid #253545;border-radius:6px;color:#d0e0f0;font-family:Consolas,monospace;font-size:.82rem}
+.scpi-form button{padding:.4rem .8rem;background:#205080;color:#d0e0f0;border:none;border-radius:6px;cursor:pointer;font-size:.82rem;white-space:nowrap}
+.scpi-form button:hover{background:#2868a0}
+.btn-sm{padding:.2rem .6rem;background:#205080;color:#d0e0f0;border:none;border-radius:4px;cursor:pointer;font-size:.72rem;text-decoration:none;margin-left:.5rem;vertical-align:middle}
+.btn-sm:hover{background:#2868a0}
+pre.result{background:#0a1018;color:#90c0d0;padding:.6rem;border-radius:6px;border:1px solid #253545;font-family:Consolas,monospace;font-size:.78rem;white-space:pre-wrap;word-break:break-all;max-height:150px;overflow:auto}</style>
 </head>
 <body>
+<div class="main">
+<div class="left">
 <div class="card">
   <h1>NetBus</h1>
   <span class="tag">STM32H743ZI</span>
@@ -39,7 +52,6 @@ a{color:#60b0e0}</style>
   <span class="tag">v<!--#version--></span>
   <div class="nav">
     <a href="http://192.168.1.10/index.html" class="on">Dashboard</a>
-    <a href="http://192.168.1.10/tasks.html">Tasks</a>
     <a href="http://192.168.1.10/netcfg.html">Network</a>
   </div>
 </div>
@@ -48,9 +60,8 @@ a{color:#60b0e0}</style>
   <table>
     <tbody><tr><td class="k">Status</td><td class="v"><!--#sysst--></td></tr>
     <tr><td class="k">Firmware</td><td class="v">v<!--#version--></td></tr>
-    <tr><td class="k">Build</td><td class="v"><!--#bldate--></td></tr>
     <tr><td class="k">Uptime</td><td class="v"><!--#uptime--></td></tr>
-    <tr><td class="k">Free Heap</td><td class="v"><!--#heap--> B (min <!--#heapmin--> B)</td></tr>
+    <tr><td class="k">Free Heap</td><td class="v"><!--#heap--> B</td></tr>
   </tbody></table>
 </div>
 <div class="card">
@@ -73,20 +84,33 @@ a{color:#60b0e0}</style>
   </tbody></table>
 </div>
 <div class="card">
-  <h2>Task Summary</h2>
+  <h2>RF Parameters</h2>
   <table>
-    <tbody><tr><th>Name</th><th>S</th><th>Pri</th><th>Stack</th></tr>
-    <!--#tasks-->
+    <tbody><tr><td class="k">Attenuator A</td><td class="v"><!--#att1--></td></tr>
+    <tr><td class="k">Attenuator B</td><td class="v"><!--#att2--></td></tr>
+    <tr><td class="k">RF Switch 1</td><td class="v"><!--#rfsw1--></td></tr>
+    <tr><td class="k">RF Switch 2</td><td class="v"><!--#rfsw2--></td></tr>
+    <tr><td class="k">Power H</td><td class="v"><!--#det_h--></td></tr>
+    <tr><td class="k">Power V</td><td class="v"><!--#det_v--></td></tr>
   </tbody></table>
+</div>
+</div>
+<div class="right">
+<div class="card">
+  <h2>SCPI Console</h2>
+  <form class="scpi-form" action="http://192.168.1.10/scpi.cgi" method="GET">
+    <input name="cmd" value="&lt;!--#lastcmd--&gt;" placeholder="*IDN?" autocomplete="off">
+    <button type="submit">Send</button>
+  </form>
 </div>
 <div class="card">
-  <h2>Module Status</h2>
-  <table>
-    <tbody><tr><th>Module</th><th>State</th></tr>
-    <!--#modst-->
-  </tbody></table>
+  <h2>System Log <a href="http://192.168.1.10/log_clear.cgi" class="btn-sm">Clear</a></h2>
+  <textarea readonly="">&lt;!--#log--&gt;</textarea>
 </div>
-<div class="footer">NetBus — auto-refresh 10s</div>
+</div>
+</div>
+<div class="footer">NetBus</div>
+<div class="footer">NetBus</div>
 
 
 </body></html>

@@ -103,17 +103,6 @@
 #define LWIP_HTTPD 1
 /*----- Value in opt.h for HTTPD_USE_CUSTOM_FSDATA: 0 -----*/
 #define HTTPD_USE_CUSTOM_FSDATA 1
-#define HTTPD_FSDATA_FILE "fsdata_custom.inc"
-/*----- HTTPD SSI enabled for dynamic content -----*/
-#define LWIP_HTTPD_SSI 1
-#define LWIP_HTTPD_SSI_INCLUDE_TAG 0
-#define LWIP_HTTPD_SSI_EXTENSIONS ".html", ".shtml", ".shtm", ".ssi", ".xml", ".json"
-#define LWIP_HTTPD_MAX_TAG_INSERT_LEN 1024
-/*----- HTTPD CGI enabled for form handling -----*/
-#define LWIP_HTTPD_CGI 1
-#define LWIP_HTTPD_MAX_CGI_PARAMETERS 12
-/*----- HTTPD performance: limit concurrent connections -----*/
-#define LWIP_HTTPD_KILL_OLD_ON_CONNECTIONS_EXCEEDED 1
 /*----- Value in opt.h for LWIP_STATS: 1 -----*/
 #define LWIP_STATS 0
 /*----- Value in opt.h for CHECKSUM_GEN_IP: 1 -----*/
@@ -134,7 +123,17 @@
 #define CHECKSUM_CHECK_ICMP6 0
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
-
+#define HTTPD_FSDATA_FILE "fsdata_custom.inc"
+/*----- HTTPD SSI enabled for dynamic content -----*/
+#define LWIP_HTTPD_SSI 1
+#define LWIP_HTTPD_SSI_INCLUDE_TAG 0
+#define LWIP_HTTPD_SSI_EXTENSIONS ".html", ".shtml", ".shtm", ".ssi", ".xml", ".json"
+#define LWIP_HTTPD_MAX_TAG_INSERT_LEN 1024
+/*----- HTTPD CGI enabled for form handling -----*/
+#define LWIP_HTTPD_CGI 1
+#define LWIP_HTTPD_MAX_CGI_PARAMETERS 12
+/*----- HTTPD performance: limit concurrent connections -----*/
+#define LWIP_HTTPD_KILL_OLD_ON_CONNECTIONS_EXCEEDED 1
 /* USER CODE END 1 */
 
 #ifdef __cplusplus

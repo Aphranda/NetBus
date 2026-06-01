@@ -57,13 +57,19 @@
     ".right .card{padding:1rem}\r\n" \
     "textarea{width:100%;background:#0a1018;color:#90c0d0;border:1px solid #253545;" \
       "border-radius:6px;padding:.5rem;font-family:Consolas,monospace;font-size:.78rem;" \
-      "resize:vertical;height:200px}\r\n" \
+      "resize:vertical;height:360px}\r\n" \
     ".scpi-form{display:flex;gap:.4rem}\r\n" \
     ".scpi-form input{flex:1;padding:.4rem .5rem;background:#0a1018;border:1px solid #253545;" \
       "border-radius:6px;color:#d0e0f0;font-family:Consolas,monospace;font-size:.82rem}\r\n" \
     ".scpi-form button{padding:.4rem .8rem;background:#205080;color:#d0e0f0;border:none;" \
       "border-radius:6px;cursor:pointer;font-size:.82rem;white-space:nowrap}\r\n" \
     ".scpi-form button:hover{background:#2868a0}\r\n" \
+    ".btn-sm{padding:.2rem .6rem;background:#205080;color:#d0e0f0;border:none;" \
+      "border-radius:4px;cursor:pointer;font-size:.72rem;text-decoration:none;" \
+      "margin-left:.5rem;vertical-align:middle}\r\n" \
+    ".btn-sm:hover{background:#2868a0}\r\n" \
+    ".log-frame{width:100%;height:360px;border:1px solid #253545;border-radius:6px;" \
+      "background:#0a1018}\r\n" \
     "pre.result{background:#0a1018;color:#90c0d0;padding:.6rem;border-radius:6px;" \
       "border:1px solid #253545;font-family:Consolas,monospace;font-size:.78rem;" \
       "white-space:pre-wrap;word-break:break-all;max-height:150px;overflow:auto}"
@@ -91,7 +97,7 @@ static const unsigned char data_index_html[] =
     "  <span class=\"tag\">FreeRTOS + LwIP</span>\r\n"
     "  <span class=\"tag\">v<!--#version--></span>\r\n"
     "  <div class=\"nav\">\r\n"
-    "    <a href=\"/index.html\" class=\"on\">Dashboard</a>\r\n"
+    "    <a href=\"/index.shtml\" class=\"on\">Dashboard</a>\r\n"
     "    <a href=\"/netcfg.html\">Network</a>\r\n"
     "  </div>\r\n"
     "</div>\r\n"
@@ -138,14 +144,14 @@ static const unsigned char data_index_html[] =
     "<div class=\"right\">\r\n"
     "<div class=\"card\">\r\n"
     "  <h2>SCPI Console</h2>\r\n"
-    "  <form class=\"scpi-form\" action=\"/scpi.cgi\" method=\"GET\">\r\n"
-    "    <input name=\"cmd\" placeholder=\"*IDN?\" autocomplete=\"off\">\r\n"
+    "  <form class=\"scpi-form\" action=\"/scpi.cgi\" method=\"GET\" target=\"logf\">\r\n"
+    "    <input name=\"cmd\" value=\"<!--#lastcmd-->\" placeholder=\"*IDN?\" autocomplete=\"off\">\r\n"
     "    <button type=\"submit\">Send</button>\r\n"
     "  </form>\r\n"
     "</div>\r\n"
     "<div class=\"card\">\r\n"
-    "  <h2>System Log</h2>\r\n"
-    "  <textarea readonly><!--#log--></textarea>\r\n"
+    "  <h2>System Log <a href=\"/log_clear.cgi\" class=\"btn-sm\" target=\"logf\">Clear</a></h2>\r\n"
+    "  <iframe src=\"/log_view.html\" name=\"logf\" class=\"log-frame\"></iframe>\r\n"
     "</div>\r\n"
     "</div>\r\n"
     "</div>\r\n"
@@ -159,7 +165,7 @@ static const struct fsdata_file file_index_html = {
     (const unsigned char *)"/index.html",
     data_index_html,
     sizeof(data_index_html),
-    0
+    FS_FILE_FLAGS_SSI
 };
 
 /* /index.shtml — same data as index.html.  LWIP's default-filename list
@@ -169,7 +175,7 @@ static const struct fsdata_file file_index_shtml = {
     (const unsigned char *)"/index.shtml",
     data_index_html,
     sizeof(data_index_html),
-    0
+    FS_FILE_FLAGS_SSI
 };
 
 /* ── /netcfg.html (Network Configuration) ────────────────────────────────── */
@@ -307,6 +313,66 @@ static const struct fsdata_file file_netcfg_err_html = {
     0
 };
 
+/* ── /scpi_ok.html (minimal redirect after SCPI enqueue) ────────────────── */
+
+static const unsigned char data_scpi_ok_html[] =
+    "<!DOCTYPE html>\r\n"
+    "<html><head>"
+    "<meta charset=\"UTF-8\">"
+    "<meta http-equiv=\"refresh\" content=\"0;url=/index.shtml\">"
+    "</head><body><a href=\"/index.shtml\">OK</a></body></html>\r\n";
+
+static const struct fsdata_file file_scpi_ok_html = {
+    &file_netcfg_err_html,
+    (const unsigned char *)"/scpi_ok.html",
+    data_scpi_ok_html,
+    sizeof(data_scpi_ok_html),
+    0
+};
+
+/* ── /scpi_done.html (redirects to log view, for iframe form target) ────── */
+
+static const unsigned char data_scpi_done_html[] =
+    "<!DOCTYPE html>\r\n"
+    "<html><head>"
+    "<meta charset=\"UTF-8\">"
+    "<meta http-equiv=\"refresh\" content=\"0;url=/log_view.html\">"
+    "</head><body></body></html>\r\n";
+
+static const struct fsdata_file file_scpi_done_html = {
+    &file_scpi_ok_html,
+    (const unsigned char *)"/scpi_done.html",
+    data_scpi_done_html,
+    sizeof(data_scpi_done_html),
+    0
+};
+
+/* ── /log_view.html (standalone log viewer) ─────────────────────────────── */
+
+static const unsigned char data_log_view_html[] =
+    "<!DOCTYPE html>\r\n"
+    "<html lang=\"en\">\r\n"
+    "<head>\r\n"
+    "<meta charset=\"UTF-8\">\r\n"
+    "<meta http-equiv=\"refresh\" content=\"5\">\r\n"
+    "<title>Log</title>\r\n"
+    "<style>\r\n"
+    "  *{margin:0;padding:0;box-sizing:border-box}\r\n"
+    "  body{background:#0a1018;color:#90c0d0;font-family:Consolas,monospace;"
+      "font-size:12px;padding:6px;line-height:1.4}\r\n"
+    "</style>\r\n"
+    "</head>\r\n"
+    "<body><pre style=\"white-space:pre-wrap;word-break:break-all;margin:0\"><!--#logtext--></pre></body>\r\n"
+    "</html>\r\n";
+
+static const struct fsdata_file file_log_view_html = {
+    &file_scpi_done_html,
+    (const unsigned char *)"/log_view.html",
+    data_log_view_html,
+    sizeof(data_log_view_html),
+    FS_FILE_FLAGS_SSI
+};
+
 /* ── /404.html ────────────────────────────────────────────────────────────── */
 
 static const unsigned char data_404_html[] =
@@ -335,7 +401,7 @@ static const unsigned char data_404_html[] =
     "</html>\r\n";
 
 static const struct fsdata_file file_404_html = {
-    &file_netcfg_err_html,
+    &file_log_view_html,
     (const unsigned char *)"/404.html",
     data_404_html,
     sizeof(data_404_html),

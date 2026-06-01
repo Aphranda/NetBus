@@ -64,6 +64,8 @@ enum {
     SSI_TAG_DET_H,
     SSI_TAG_DET_V,
     SSI_TAG_LOG,
+    SSI_TAG_LOGTEXT,
+    SSI_TAG_SCPI_LAST,
     SSI_TAG_COUNT
 };
 
@@ -88,6 +90,8 @@ static const char *g_ssi_tags[] = {
     "det_h",        /* SSI_TAG_DET_H    */
     "det_v",        /* SSI_TAG_DET_V    */
     "log",          /* SSI_TAG_LOG      */
+    "logtext",      /* SSI_TAG_LOGTEXT  */
+    "lastcmd",      /* SSI_TAG_SCPI_LAST */
 };
 
 /* ── System info helpers ──────────────────────────────────────────────────── */
@@ -154,6 +158,8 @@ static int fmt_mac(const uint8_t *mac, char *buf, int len)
 #define WEB_LOG_BUF_SIZE  2048
 static char g_web_log_buf[WEB_LOG_BUF_SIZE];
 static int  g_web_log_pos = 0;
+static int  g_web_log_total = 0; /* total bytes written, used to skip old data */
+static char g_last_scpi_cmd[128] = "";
 
 /* ── SSI handler ──────────────────────────────────────────────────────────── */
 
@@ -258,20 +264,51 @@ static u16_t Web_SSIHandler(int iIndex, char *pcInsert, int iInsertLen)
         return (u16_t)snprintf(pcInsert, iInsertLen, "---");
     }
 
-    case SSI_TAG_LOG: {
+    case SSI_TAG_SCPI_LAST: {
+        /* HTML-escape for safe use in attribute value */
         int n = 0;
-        int end = g_web_log_pos;
-        int start = (end + 1) % WEB_LOG_BUF_SIZE;
-        for (int i = 0; i < WEB_LOG_BUF_SIZE - 1 && n < iInsertLen - 1; i++) {
-            int idx = (start + i) % WEB_LOG_BUF_SIZE;
-            char c = g_web_log_buf[idx];
-            if (c == '\0') break;
-            if (c == '<')      { pcInsert[n++] = '&'; pcInsert[n++] = 'l'; pcInsert[n++] = 't'; pcInsert[n++] = ';'; }
-            else if (c == '>') { pcInsert[n++] = '&'; pcInsert[n++] = 'g'; pcInsert[n++] = 't'; pcInsert[n++] = ';'; }
-            else if (c == '&') { pcInsert[n++] = '&'; pcInsert[n++] = 'a'; pcInsert[n++] = 'm'; pcInsert[n++] = 'p'; pcInsert[n++] = ';'; }
+        for (const char *s = g_last_scpi_cmd; *s && n < iInsertLen - 7; s++) {
+            char c = *s;
+            if (c == '"')      { memcpy(pcInsert + n, "&quot;", 6); n += 6; }
+            else if (c == '<') { memcpy(pcInsert + n, "&lt;", 4); n += 4; }
+            else if (c == '>') { memcpy(pcInsert + n, "&gt;", 4); n += 4; }
+            else if (c == '&') { memcpy(pcInsert + n, "&amp;", 5); n += 5; }
             else pcInsert[n++] = c;
         }
-        if (n == 0) pcInsert[n++] = '-';
+        return (u16_t)n;
+    }
+
+    case SSI_TAG_LOG: {
+        int n = 0;
+        int start = 0;
+        int total = g_web_log_pos;
+        if (total > 800) start = total - 800;
+        for (int i = start; i < total && n < iInsertLen - 7; i++) {
+            char c = g_web_log_buf[i];
+            if (c == '\0') c = ' ';
+            if (c == '<')      { memcpy(pcInsert + n, "&lt;", 4); n += 4; }
+            else if (c == '>') { memcpy(pcInsert + n, "&gt;", 4); n += 4; }
+            else if (c == '&') { memcpy(pcInsert + n, "&amp;", 5); n += 5; }
+            else pcInsert[n++] = c;
+        }
+        if (n == 0) { pcInsert[0] = '-'; n = 1; }
+        return (u16_t)n;
+    }
+
+    case SSI_TAG_LOGTEXT: {
+        int n = 0;
+        int start = 0;
+        int total = g_web_log_pos; /* chars in buffer */
+        if (total > 600) start = total - 600; /* last 600 chars only */
+        for (int i = start; i < total && n < iInsertLen - 7; i++) {
+            char c = g_web_log_buf[i];
+            if (c == '\0') c = ' ';
+            if (c == '<')      { memcpy(pcInsert + n, "&lt;", 4); n += 4; }
+            else if (c == '>') { memcpy(pcInsert + n, "&gt;", 4); n += 4; }
+            else if (c == '&') { memcpy(pcInsert + n, "&amp;", 5); n += 5; }
+            else pcInsert[n++] = c;
+        }
+        if (n == 0) { pcInsert[0] = '-'; n = 1; }
         return (u16_t)n;
     }
 
@@ -287,6 +324,7 @@ enum {
     CGI_NETCFG = 0,
     CGI_REBOOT,
     CGI_SCPI,
+    CGI_LOG_CLEAR,
     CGI_COUNT
 };
 
@@ -377,9 +415,6 @@ static const char *Web_NetConfigCGI(int iIndex, int iNumParams,
     Storage_Set("net.port", STORAGE_TYPE_U32, &port,   sizeof(port));
     Storage_Commit();
 
-    LOG_INFO("Web: net config saved ip=%s mask=%s gw=%s port=%lu",
-             ip_str, mask_str, gw_str, (unsigned long)port);
-
     return "/netcfg_ok.html";
 }
 
@@ -404,11 +439,15 @@ static void Web_LogWrite(const char *data, size_t len)
 {
     for (size_t i = 0; i < len; i++) {
         char c = data[i];
-        if (c == '\r') continue;           /* skip CR, keep LF */
-        g_web_log_buf[g_web_log_pos] = c;
+        if (c == '\r') continue;
+        /* Advance pos, null-terminate at new pos BEFORE writing char
+           to old pos — ensures \0 is always present for concurrent reads. */
         g_web_log_pos = (g_web_log_pos + 1) % WEB_LOG_BUF_SIZE;
+        g_web_log_buf[g_web_log_pos] = '\0';
+        int prev = (g_web_log_pos - 1 + WEB_LOG_BUF_SIZE) % WEB_LOG_BUF_SIZE;
+        g_web_log_buf[prev] = c;
+        g_web_log_total++;
     }
-    g_web_log_buf[g_web_log_pos] = '\0';
 }
 
 /* ── SCPI CGI: enqueue command into existing SCPI task pipeline ──────────── */
@@ -441,6 +480,10 @@ static const char *Web_SCPI_CGI(int iIndex, int iNumParams,
     }
     decoded[di] = '\0';
 
+    /* Save for input field retention */
+    strncpy(g_last_scpi_cmd, decoded, sizeof(g_last_scpi_cmd) - 1);
+    g_last_scpi_cmd[sizeof(g_last_scpi_cmd) - 1] = '\0';
+
     /* Append \r\n terminator */
     if (di < (int)sizeof(decoded) - 3) {
         decoded[di++] = '\r';
@@ -449,14 +492,24 @@ static const char *Web_SCPI_CGI(int iIndex, int iNumParams,
     }
 
     SCPI_EnqueueLine(decoded);
-    LOG_INFO("Web: SCPI enqueued: %s", decoded);
-    return "/index.html";
+    return "/scpi_done.html";
+}
+
+static const char *Web_LogClearCGI(int iIndex, int iNumParams,
+                                    char *pcParam[], char *pcValue[])
+{
+    (void)iIndex; (void)iNumParams; (void)pcParam; (void)pcValue;
+    g_web_log_pos = 0;
+    g_web_log_buf[0] = '\0';
+    g_web_log_pos = 0;
+    return "/log_view.html";
 }
 
 static const tCGI g_webCGIs[] = {
-    { "/netcfg.cgi",  Web_NetConfigCGI },
-    { "/reboot.cgi",  Web_RebootCGI },
-    { "/scpi.cgi",    Web_SCPI_CGI },
+    { "/netcfg.cgi",     Web_NetConfigCGI },
+    { "/reboot.cgi",     Web_RebootCGI },
+    { "/scpi.cgi",       Web_SCPI_CGI },
+    { "/log_clear.cgi",  Web_LogClearCGI },
 };
 
 /* ── Module interface ─────────────────────────────────────────────────────── */
