@@ -34,6 +34,7 @@
 /* Within 'USER CODE' section, code will be kept by default at each generation */
 /* USER CODE BEGIN 0 */
 #include "log.h"
+#include "storage_task.h"
 /* USER CODE END 0 */
 
 /* Private define ------------------------------------------------------------*/
@@ -232,7 +233,22 @@ static void low_level_init(struct netif *netif)
   heth.Init.RxBuffLen = 1528;
 
   /* USER CODE BEGIN MACADDRESS */
-
+  {
+      char buf[32];
+      Storage_Type_t type;
+      uint16_t len = sizeof(buf);
+      unsigned int o[6];
+      if (Storage_Get("net.mac", &type, buf, &len) == 0
+          && type == STORAGE_TYPE_STR && len < sizeof(buf)) {
+          buf[len] = '\0';
+          if (sscanf(buf, "%x:%x:%x:%x:%x:%x", &o[0], &o[1], &o[2], &o[3], &o[4], &o[5]) == 6) {
+              MACAddr[0] = (uint8_t)o[0]; MACAddr[1] = (uint8_t)o[1];
+              MACAddr[2] = (uint8_t)o[2]; MACAddr[3] = (uint8_t)o[3];
+              MACAddr[4] = (uint8_t)o[4]; MACAddr[5] = (uint8_t)o[5];
+              LOG_INFO("ETH: MAC loaded from flash: %s", buf);
+          }
+      }
+  }
   /* USER CODE END MACADDRESS */
 
   hal_eth_init_status = HAL_ETH_Init(&heth);

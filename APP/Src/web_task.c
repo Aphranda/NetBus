@@ -66,6 +66,7 @@ enum {
     SSI_TAG_LOG,
     SSI_TAG_LOGTEXT,
     SSI_TAG_SCPI_LAST,
+    SSI_TAG_SCPIPORT,
     SSI_TAG_COUNT
 };
 
@@ -92,6 +93,7 @@ static const char *g_ssi_tags[] = {
     "log",          /* SSI_TAG_LOG      */
     "logtext",      /* SSI_TAG_LOGTEXT  */
     "lastcmd",      /* SSI_TAG_SCPI_LAST */
+    "scpiport",     /* SSI_TAG_SCPIPORT */
 };
 
 /* ── System info helpers ──────────────────────────────────────────────────── */
@@ -278,6 +280,13 @@ static u16_t Web_SSIHandler(int iIndex, char *pcInsert, int iInsertLen)
         return (u16_t)n;
     }
 
+    case SSI_TAG_SCPIPORT: {
+        uint32_t port = 5025;
+        uint16_t len = sizeof(port);
+        Storage_Get("net.port", NULL, &port, &len);
+        return (u16_t)snprintf(pcInsert, iInsertLen, "%lu", (unsigned long)port);
+    }
+
     case SSI_TAG_LOG: {
         int n = 0;
         int start = 0;
@@ -296,18 +305,33 @@ static u16_t Web_SSIHandler(int iIndex, char *pcInsert, int iInsertLen)
     }
 
     case SSI_TAG_LOGTEXT: {
-        int n = 0;
-        int start = 0;
-        int total = g_web_log_pos; /* chars in buffer */
-        if (total > 600) start = total - 600; /* last 600 chars only */
-        for (int i = start; i < total && n < iInsertLen - 7; i++) {
+        int n = 0, start = 0, total = g_web_log_pos;
+        if (total > 600) start = total - 600;
+        int at_line_start = 1;
+        const char *css = "";
+        for (int i = start; i < total && n < iInsertLen - 30; i++) {
             char c = g_web_log_buf[i];
             if (c == '\0') c = ' ';
-            if (c == '<')      { memcpy(pcInsert + n, "&lt;", 4); n += 4; }
+            if (at_line_start) {
+                at_line_start = 0;
+                if (i + 6 <= total && g_web_log_buf[i]==']' && g_web_log_buf[i+1]==' ' && g_web_log_buf[i+2]=='[') {
+                    if      (g_web_log_buf[i+3]=='E' && g_web_log_buf[i+4]=='R' && g_web_log_buf[i+5]=='R') css = "err";
+                    else if (g_web_log_buf[i+3]=='W' && g_web_log_buf[i+4]=='A' && g_web_log_buf[i+5]=='R') css = "warn";
+                    else if (g_web_log_buf[i+3]=='I' && g_web_log_buf[i+4]=='N' && g_web_log_buf[i+5]=='F') css = "info";
+                    else css = "";
+                }
+                if (css[0]) n += snprintf(pcInsert + n, iInsertLen - n, "<span class=\"%s\">", css);
+            }
+            if (c == '\n') {
+                if (css[0]) { memcpy(pcInsert + n, "</span>", 7); n += 7; css = ""; }
+                pcInsert[n++] = '\n';
+                at_line_start = 1;
+            } else if (c == '<') { memcpy(pcInsert + n, "&lt;", 4); n += 4; }
             else if (c == '>') { memcpy(pcInsert + n, "&gt;", 4); n += 4; }
             else if (c == '&') { memcpy(pcInsert + n, "&amp;", 5); n += 5; }
             else pcInsert[n++] = c;
         }
+        if (css[0]) { memcpy(pcInsert + n, "</span>", 7); n += 7; }
         if (n == 0) { pcInsert[0] = '-'; n = 1; }
         return (u16_t)n;
     }
@@ -373,10 +397,26 @@ static int is_valid_mask(const uint8_t *octets)
 }
 
 /**
+  * @brief  Parse a MAC address string "XX:XX:XX:XX:XX:XX" into octets.
+  * @retval 1 on success, 0 on malformed input.
+  */
+static int parse_mac(const char *s, uint8_t *octets)
+{
+    unsigned int o[6];
+    int n = sscanf(s, "%x:%x:%x:%x:%x:%x", &o[0], &o[1], &o[2], &o[3], &o[4], &o[5]);
+    if (n != 6) return 0;
+    for (int i = 0; i < 6; i++) {
+        if (o[i] > 255) return 0;
+        octets[i] = (uint8_t)o[i];
+    }
+    return 1;
+}
+
+/**
   * @brief  CGI: /netcfg.cgi — save network configuration to flash.
   *
-  * Expected params: ip, mask, gw, scpi_port
-  * Saves to storage keys: net.ip, net.mask, net.gw, net.port
+  * Expected params: ip, mask, gw, mac, port
+  * Saves to storage keys: net.ip, net.mask, net.gw, net.mac, net.port
   * Settings take effect after reboot.
   */
 static const char *Web_NetConfigCGI(int iIndex, int iNumParams,
@@ -387,6 +427,7 @@ static const char *Web_NetConfigCGI(int iIndex, int iNumParams,
     const char *mask_str = cgi_param("mask", iNumParams, pcParam, pcValue);
     const char *gw_str  = cgi_param("gw",  iNumParams, pcParam, pcValue);
     const char *port_str = cgi_param("port", iNumParams, pcParam, pcValue);
+    const char *mac_str  = cgi_param("mac",  iNumParams, pcParam, pcValue);
 
     /* ── Validate IP ────────────────────────────────────────────────── */
     if (ip_str == NULL || mask_str == NULL || gw_str == NULL) {
@@ -408,13 +449,27 @@ static const char *Web_NetConfigCGI(int iIndex, int iNumParams,
         port = (uint32_t)p;
     }
 
+    /* ── Validate MAC ────────────────────────────────────────────────── */
+    uint8_t mac[6];
+    int has_mac = 0;
+    if (mac_str != NULL && strlen(mac_str) > 0) {
+        if (!parse_mac(mac_str, mac)) return "/netcfg_err.html";
+        has_mac = 1;
+    }
+
     /* ── Save to flash ───────────────────────────────────────────────── */
     Storage_Set("net.ip",   STORAGE_TYPE_STR, ip_str,  (uint16_t)strlen(ip_str));
     Storage_Set("net.mask", STORAGE_TYPE_STR, mask_str,(uint16_t)strlen(mask_str));
     Storage_Set("net.gw",   STORAGE_TYPE_STR, gw_str,  (uint16_t)strlen(gw_str));
     Storage_Set("net.port", STORAGE_TYPE_U32, &port,   sizeof(port));
+    if (has_mac) {
+        Storage_Set("net.mac", STORAGE_TYPE_STR, mac_str, (uint16_t)strlen(mac_str));
+    }
     Storage_Commit();
 
+    if (cgi_param("reboot", iNumParams, pcParam, pcValue) != NULL) {
+        NVIC_SystemReset();
+    }
     return "/netcfg_ok.html";
 }
 
@@ -462,7 +517,7 @@ static const char *Web_SCPI_CGI(int iIndex, int iNumParams,
 {
     (void)iIndex;
     const char *cmd = cgi_param("cmd", iNumParams, pcParam, pcValue);
-    if (cmd == NULL || strlen(cmd) == 0) return "/index.html";
+    if (cmd == NULL || strlen(cmd) == 0) return "/log_view.html";
 
     /* URL-decode %XX escapes */
     char decoded[128];
@@ -483,6 +538,13 @@ static const char *Web_SCPI_CGI(int iIndex, int iNumParams,
     /* Save for input field retention */
     strncpy(g_last_scpi_cmd, decoded, sizeof(g_last_scpi_cmd) - 1);
     g_last_scpi_cmd[sizeof(g_last_scpi_cmd) - 1] = '\0';
+
+    /* Skip empty / whitespace-only commands */
+    int has_cmd = 0;
+    for (int i = 0; decoded[i]; i++) {
+        if (decoded[i] > ' ') { has_cmd = 1; break; }
+    }
+    if (!has_cmd) return "/log_view.html";
 
     /* Append \r\n terminator */
     if (di < (int)sizeof(decoded) - 3) {
